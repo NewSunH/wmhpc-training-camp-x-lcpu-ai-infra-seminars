@@ -18,6 +18,63 @@ contract: 实现 run(program) -> (regs, cycles)
 通过 pytest tests/test_simt_sim.py 即为完成。
 """
 
+from typing import TypeAlias, Union
+from typing import cast
 
-def run(program):
-    raise NotImplementedError("从这里开始写")
+Add: TypeAlias = tuple[str, int]
+Mul: TypeAlias = tuple[str, int]
+
+Program: TypeAlias = list["Instruction"]
+
+IfLt: TypeAlias = tuple[str, int, Program, Program]
+
+Instruction: TypeAlias = Union[
+    Add,
+    Mul,
+    IfLt,
+]
+Regs: TypeAlias = list[int]
+Cycles: TypeAlias = int
+
+def run(program: Program) -> tuple[Regs, Cycles]:
+    # raise NotImplementedError("从这里开始写")
+    regs = list(range(32))
+    mask = [1] * 32
+    return execute(program, mask, regs)
+
+
+def execute(program: Program, mask: list[int], regs: Regs)  -> tuple[Regs, Cycles]:
+    cycles = 0
+    for instruction in program:
+        if instruction[0] == "add":
+            isExecute = 0
+            for i in range(32):
+                if mask[i] == 1:
+                    isExecute = 1
+                    regs[i] += instruction[1]
+            cycles += isExecute
+        if instruction[0] == "mul":
+            isExecute = 0
+            for i in range(32):
+                if mask[i] == 1:
+                    isExecute = 1
+                    regs[i] *= instruction[1]
+            cycles += isExecute
+        if instruction[0] == "if_lt":
+            inst = cast(IfLt, instruction)
+            maskThen = list(mask)
+            maskElse = list(mask)
+            for i in range(32):
+                if regs[i] < inst[1]:
+                    maskElse[i] *= 0
+                else:
+                    maskThen[i] *= 0
+            result = execute(inst[2], maskThen, regs)
+            regs = result[0]
+            cycles += result[1]
+            result = execute(inst[3], maskElse, regs)
+            regs = result[0]
+            cycles += result[1]
+    return (regs, cycles)
+        
+
