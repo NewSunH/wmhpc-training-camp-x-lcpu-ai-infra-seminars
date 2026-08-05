@@ -264,15 +264,17 @@ make run/m2_first_kernel/01_vector_add
 \prob{2.2}{CONCEPT}
 为下列五个场景选择正确的修饰符（如 \texttt{\_\_global\_\_} 等）。
 \begin{enumerate}[label=(\alph*)]
-  \item 在 GPU 上执行、由 CPU 侧启动的 kernel 函数。
-  \item 只会被 kernel 调用的辅助函数。
-  \item host 和 device 代码都要调用的小工具函数。
-  \item 整个 kernel 运行期间不变、所有线程都要读的系数表。
-  \item block 内线程共享的暂存数组。
+  \item 在 GPU 上执行、由 CPU 侧启动的 kernel 函数。\texttt{\_\_global\_\_}
+  \item 只会被 kernel 调用的辅助函数。\texttt{\_\_device\_\_}
+  \item host 和 device 代码都要调用的小工具函数。\texttt{\_\_host\_\_ \_\_device\_\_}
+  \item 整个 kernel 运行期间不变、所有线程都要读的系数表。\texttt{\_\_constant\_\_}
+  \item block 内线程共享的暂存数组。\texttt{\_\_shared\_\_}
 \end{enumerate}
 
 \prob{2.3}{MODIFY}[cuda/m2\_first\_kernel/02\_vector\_add\_um.cu]
 \texttt{02\_vector\_add\_um.cu} 代码完整，但目前是“显式内存管理”的版本。改之前先按原样编译运行一次，记下耗时——这一版会被你的改动覆盖掉，下面 (b) 要拿它做对照。然后按文件头的说明改成 unified memory 版（\texttt{cudaMallocManaged}），并保持文件头写明的计时窗口不变。
+
+改前耗时：113.7ms；改后耗时：96.0ms
 
 \begin{lstlisting}
 cd assignment01/cuda
@@ -280,6 +282,8 @@ make run/m2_first_kernel/02_vector_add_um
 \end{lstlisting}
 
 然后请回答如下问题：(a)~kernel 启动之后、CPU 读结果之前，为什么必须有一次同步？在原先的版本里这次同步发生在哪个调用里？(b)~对比两版“搬运 + kernel + 读回”的耗时，分析差距的原因（谁快谁慢都有可能，与使用的卡有关）。
+
+(a)~kernel 启动之后，需要把 cpu 中的数据 copy 到 GPU；CPU 读取结果之前需要把 GPU 数据copy 到 CPU，给子需要一个同步。(b)~自动更快，可能是编译器可以优化掉在 GPU 数据传输的一些时机，会比手动 malloc 快一些。
 
 \prob{2.4}{CONCEPT}
 判断对错，可以顺带补一句理由。
