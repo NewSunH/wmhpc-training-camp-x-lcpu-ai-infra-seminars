@@ -2,14 +2,18 @@
 % 编译：xelatex -interaction=nonstopmode assignment01.tex（跑两遍）
 \documentclass[11pt,a4paper,fontset=none]{ctexart}
 
-\setCJKmainfont[BoldFont={Noto Serif CJK SC Bold}]{Noto Serif CJK SC}
+\setCJKmainfont[
+  BoldFont={Noto Serif CJK SC Bold},
+  SlantedFont={Noto Serif CJK SC}
+]{Noto Serif CJK SC}
 \setCJKsansfont[BoldFont={Noto Sans CJK SC Bold}]{Noto Sans CJK SC}
 \setCJKmonofont{Noto Sans CJK SC}
 \usepackage{geometry}
 \geometry{margin=2.3cm}
 
 \usepackage{amsmath,amssymb}
-\usepackage{booktabs,array,multirow}
+\usepackage{booktabs,array,multirow,tabularx}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \usepackage{enumitem}
 \setlist{nosep,leftmargin=2em}
 \usepackage{xcolor}
@@ -33,6 +37,7 @@
 }
 \usepackage{hyperref}
 \hypersetup{colorlinks, linkcolor=accent, urlcolor=accent}
+\Urlmuskip=0mu plus 1mu
 \emergencystretch=3em
 
 % 参考资料框
@@ -185,7 +190,7 @@ Session 1 讲座里提过“N 方过百万”这个例子。总计算量 $10^{12
 补全下表（thread 一行已填好作为示例）
 
 \begin{center}\small
-  \begin{tabular}{@{}p{5.2em}p{9em}p{7.5em}p{7.5em}p{8em}@{}}
+  \begin{tabular}{@{}L{5.2em}L{9em}L{7.5em}L{7.5em}L{8em}@{}}
     \toprule
     执行层次        & 软件含义                                 & 对应硬件                    & 直接可用的存储                        & 同步与通信手段                        \\
     \midrule
@@ -649,9 +654,9 @@ Guide 从 13.x 起把 tile 编程作为与 SIMT 并列的第二种官方模型�
 \prob{6.1}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item tile 是显存里的一块可变区域，kernel 通过指针直接改写它。
-  \item 对 tile 的一次运算（如两个 tile 相加）由编译器映射到 block 内的多个线程上执行。
-  \item tile 模型与 SIMT 模型互斥，一个 CUDA 程序只能选一种。
+  \item tile 是显存里的一块可变区域，kernel 通过指针直接改写它。（错）
+  \item 对 tile 的一次运算（如两个 tile 相加）由编译器映射到 block 内的多个线程上执行。（对）
+  \item tile 模型与 SIMT 模型互斥，一个 CUDA 程序只能选一种。（错）
 \end{enumerate}
 
 \prob{6.2}{CONCEPT}
@@ -675,20 +680,38 @@ def vec_add(a, b, c, TILE: ct.Constant[int]):
 据此补全下表（Triton 一列可以做完 Module 7 再回来填）：
 
 \begin{center}\small
-  \begin{tabular}{@{}lp{8em}p{9em}p{9em}@{}}
+  \begin{tabularx}{\linewidth}{@{}p{4.2em}
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X@{}}
     \toprule
-         & CUDA SIMT                              & cuTile & Triton \\
+         & CUDA SIMT                                      & cuTile & Triton \\
     \midrule
-    并行单位 & block 里的 thread                        & block  &        \\
-    编号   & \texttt{blockIdx} / \texttt{threadIdx} &        &        \\
-    数据分工 & 线程用全局下标来划分数据                           &        &        \\
-    边界处理 & \texttt{if} 判断                         &        &        \\
+    并行单位 & block 内的 thread
+         & block
+         & program（处理一个 tile）                                               \\
+    编号   & \texttt{blockIdx}、\texttt{threadIdx}
+         & \texttt{ct.bid(axis)}
+         & \texttt{tl.program\_id}\newline\texttt{(axis)}                   \\
+    数据分工 & 线程用全局下标划分元素
+         & block 根据 bid 加载并处理一个或多个 tile
+         & program 用 pid 和 \texttt{tl.arange} 构造一组元素下标                      \\
+    边界处理 & 用 \texttt{if} 逐线程判断
+         & load 选择 padding；store 丢弃越界写
+         & 构造 mask，传给 \texttt{tl.load}/\texttt{tl.store}                    \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{center}
+
+cuTile 将边界语义放在 tile 的 load/store 上，不需要逐线程写 \texttt{if}；
+但若越界 load 的值会参与有效结果，程序员仍需选择合适的 padding mode。
 
 \prob{6.3}{CONCEPT}
 仍看上面这段代码。(a)~“每个线程对应哪个/些元素”由谁决定？(b)~列出一些在 CUDA SIMT 版向量加法里一定会出现、这里完全没体现出的概念。
+
+(a)~ 每个线程处理哪个或哪些元素”由 cuTile 编译器决定；程序员只指定 tile 大小，并用 bid 指定当前 block 处理哪个 tile。
+
+(b)~ 这里没有显式出现 SIMT 版本中的 threadIdx、blockDim、线程全局下标计 a[i] 形式的逐元素访存，以及每个线程执行的越界 if。这些线程级细节都由器根据 tile 形状映射到底层硬件。
 
 \begin{lookback}
   tile 并非某个 DSL 的发明。NVIDIA 自己把它与 SIMT 并列写进了 Guide 正文，这本身就说明它是一类稳定的编程方式，而不是一次工具选型。
