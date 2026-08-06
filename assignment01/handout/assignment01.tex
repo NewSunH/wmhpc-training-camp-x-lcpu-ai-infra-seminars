@@ -312,7 +312,7 @@ make run/m2_first_kernel/04_matrix_add
 \prob{2.7}{MODIFY}[cuda/m2\_first\_kernel/05\_grid\_stride.cu]
 \texttt{05\_grid\_stride.cu} 的 launch 被固定成 \texttt{<<<64, 256>>>}，线程总数远小于 $n$，当前 FAIL。在 launch 配置不变的前提下，把 kernel 改成 grid-stride loop，让任意 $n$ 都能 PASS。
 
-在 gpu 性能不够时，可以让更大的任务得以计算
+在 gpu 性能不够时，可以让更大的任务得以计算。
 
 \begin{lstlisting}
 cd assignment01/cuda
@@ -320,6 +320,8 @@ make run/m2_first_kernel/05_grid_stride
 \end{lstlisting}
 
 然后请回答——这种写法的价值在哪里？launch 只有 16384 个线程时，性能上要付出什么代价？
+
+性能弱一点，但是可以在小 GPU 上进行大计算。
 
 \prob{2.8}{EXPERIMENT}[cuda/m2\_first\_kernel/06\_whoami.cu]
 运行下面的程序两三次，观察 16 个 block 打印输出的先后。
@@ -330,6 +332,8 @@ make run/m2_first_kernel/06_whoami
 \end{lstlisting}
 
 (a)~顺序由谁决定？(b)~程序的正确性可以依赖 block 的执行顺序吗？这条限制和 Guide 1.1 说的 scalable programming model 有什么关系？
+
+(a)~执行顺序是 GPU 内的调度器决定的，不保证顺序，(b)~不可以，因为这个顺序是不确定的。每个 block 相互独立是 scalable programming model 的基础。
 
 \begin{capstone}{prob 2.9（FROM-SCRATCH）：SAXPY \hfill {\footnotesize\ttfamily cuda/m2\_first\_kernel/saxpy.cu}}
   在 \texttt{m2\_first\_kernel/} 下写出完整的 CUDA 程序 \texttt{saxpy.cu}，实现 $y \leftarrow 2.0 \cdot x + y$（单精度）。要求如下:
