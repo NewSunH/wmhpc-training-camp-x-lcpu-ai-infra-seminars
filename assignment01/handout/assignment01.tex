@@ -377,6 +377,17 @@ SIMT 给每个线程“独立执行”的表象，硬件却按 32 线程一组�
   \item 若 \texttt{blockDim = (33, 1, 1)}，占几个 warp？这样配置浪费在哪里？
 \end{enumerate}
 
+\texttt{linear\_id = threadIdx.x + \\
+  threadIdx.y * blockDim.x + \\
+  threadIdx.z * blockDim.x * blockDim.y
+}
+
+\begin{enumerate}[label=(\alph*)]
+  \item \texttt{threadIdx = (3, 5, 0)} 的线性编号是 43。第2个warp的第12个lane。
+  \item 这个 block 一共占2个 warp。
+  \item 若 \texttt{blockDim = (33, 1, 1)}，占几2个 warp。第二个 warp只有一个有效线程。
+\end{enumerate}
+
 \prob{3.2}{EXPERIMENT}[cuda/m3\_simt/01\_divergence.cu]
 \texttt{m3\_simt/01\_divergence.cu} 的两个 kernel 每线程计算量相同，分支划分不同——一个按 thread 编号的奇偶分（同一个 warp 里一半一半），一个按 warp 边界对齐分。请先预测一下哪个版本运行会更快一点，大概快几倍，然后运行验证：
 
@@ -386,6 +397,8 @@ make run/m3_simt/01_divergence
 \end{lstlisting}
 
 请解释实测比值，并回答——若两个分支的计算量一大一小，按 thread 编号奇偶分的 kernel 和按 warp 边界对齐分的 kernel 的运行时间分别由什么决定？
+
+warp 内分支：0.388ms；按照 warp 分支：0.199s。因为一个 warp 内的线程只能执行相同的任务。如果需要走到不同分支，执行就会串行化。
 
 \prob{3.3}{EXPERIMENT}[cuda/m3\_simt/02\_sync\_matters.cu]
 \texttt{02\_sync\_matters.cu} 让每个 block 用 shared memory 把自己的 256 个元素倒序。请按文件开头的注释内容进行实验。
@@ -397,8 +410,12 @@ make run/m3_simt/02_sync_matters
 
 (a)~为什么注释掉 sync 后代码不能正确地运行？(b)~(Optional) 注释掉 sync 后，翻转后的数组错的位置比较随机，但是有些位置一直是对的，试解释原因。（tip: 算一算 $t$ 与 $255-t$ 有没有可能落在同一个 warp）
 
+(a)~去掉 \texttt{\_\_syncthreads()} 后，线程可能在另一个 warp 尚未写入 \texttt{buf[255-t]} 时就读取它，产生读后写竞争；该屏障保证所有线程完成 shared memory 写入后才开始读取。(b)~$t$ 与 $255-t$ 所在的 warp 分别为 $\lfloor t/32\rfloor$ 和 $7-\lfloor t/32\rfloor$，不可能相同；部分位置持续正确只是因为当前 warp 调度次序较稳定，后读取的一方恰好看到了已完成的写入，并无正确性保证。
+
 \prob{3.4}{CONCEPT}
 \texttt{\_\_syncthreads} 只能同步本 block 内的 threads，那需要全 grid 同步时，标准做法是什么？
+
+标准做法是把同步点前后的工作拆成两个 kernel，并在同一 stream 中依次启动；前一个 kernel 完成后后一个才会执行，因此 kernel 边界构成全 grid 的同步点。若 Host 也必须等待结果，再调用 \texttt{cudaDeviceSynchronize()}；cooperative groups 的 grid 级同步仅适用于满足协作启动等限制的特殊场景。
 
 \begin{capstone}{prob 3.5（FROM-SCRATCH）：block 内归约 \hfill {\footnotesize\ttfamily cuda/m3\_simt/03\_reduce.cu}}
   在 \texttt{03\_reduce.cu} 里从零实现两个求和归约 kernel（判测与计时的代码已经写好）。两个 kernel 的 contract 见文件头。PASS 后，试解释实测性能差距的原因。
