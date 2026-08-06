@@ -9,8 +9,9 @@
 __global__ void vectorAdd(const float *a, const float *b, float *c, int n)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    if (idx < n)
-        c[idx] = a[idx] + b[idx];
+    int stride = gridDim.x * blockDim.x;
+    for (int i = idx; i < n; i += stride)
+        c[i] = a[i] + b[i];
 }
 
 int main()
@@ -35,9 +36,7 @@ int main()
     CUDA_CHECK(cudaMemcpy(d_b, h_b, bytes, cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemset(d_c, 0, bytes));
 
-    int threads = 1024;
-    int blocks = (n + threads - 1) / threads;
-    vectorAdd<<<blocks, threads>>>(d_a, d_b, d_c, n); // launch 配置不许动
+    vectorAdd<<<64, 256>>>(d_a, d_b, d_c, n); // launch 配置不许动
     CUDA_CHECK_KERNEL();
 
     CUDA_CHECK(cudaMemcpy(h_c, d_c, bytes, cudaMemcpyDeviceToHost));
