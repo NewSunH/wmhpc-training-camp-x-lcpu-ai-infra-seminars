@@ -3,26 +3,31 @@
 // 注意：多个线程可能同时修改同一个 bucket 的值。
 #include "common.h"
 
-__global__ void histogram(const unsigned char *data, unsigned int *hist, int n) {
+__global__ void histogram(const unsigned char *data, unsigned int *hist, int n)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
-    for (; i < n; i += stride) {
+    for (; i < n; i += stride)
+    {
         unsigned char v = data[i];
         // ====== 空 1：往 hist[v] 里加 1
         //         该用哪个原子操作？ ======
-        /* 填这里 */;
+        atomicAdd(&hist[v], 1);
     }
 }
 
-int main() {
+int main()
+{
     const int n = 1 << 24;
     const int BINS = 256;
 
     unsigned char *h_data = (unsigned char *)malloc(n);
     unsigned int h_hist[BINS], h_ref[BINS] = {0};
     srand(9);
-    for (int i = 0; i < n; i++) h_data[i] = (unsigned char)(rand() % BINS);
-    for (int i = 0; i < n; i++) h_ref[h_data[i]]++;
+    for (int i = 0; i < n; i++)
+        h_data[i] = (unsigned char)(rand() % BINS);
+    for (int i = 0; i < n; i++)
+        h_ref[h_data[i]]++;
 
     unsigned char *d_data;
     unsigned int *d_hist;
@@ -39,7 +44,8 @@ int main() {
                           cudaMemcpyDeviceToHost));
     int ok = 1;
     for (int b = 0; b < BINS; b++)
-        if (h_hist[b] != h_ref[b]) {
+        if (h_hist[b] != h_ref[b])
+        {
             fprintf(stderr, "bin %d: got %u, want %u\n", b, h_hist[b], h_ref[b]);
             ok = 0;
             break;

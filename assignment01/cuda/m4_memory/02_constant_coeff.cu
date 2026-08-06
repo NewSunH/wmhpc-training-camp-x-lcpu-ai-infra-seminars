@@ -10,20 +10,34 @@
 #include "common.h"
 
 __global__ void poly_eval_global(const float *x, float *y, const float *coef,
-                                 int n) {
+                                 int n)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < n) {
+    if (i < n)
+    {
         float xi = x[i];
         float acc = 0.f;
         // 秦九韶（Horner）算法，从最高次往下算。
-        for (int k = 7; k >= 0; k--) acc = acc * xi + coef[k];
+        for (int k = 7; k >= 0; k--)
+            acc = acc * xi + coef[k];
         y[i] = acc;
     }
 }
 
+__constant__ float COEF[8];
 __global__ void poly_eval_const(const float *x, float *y, const float *coef,
-                                int n) {
-    // TODO：从这里开始写（读 __constant__ COEF 的版本）
+                                int n)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < n)
+    {
+        float xi = x[i];
+        float acc = 0.f;
+        // 秦九韶（Horner）算法，从最高次往下算。
+        for (int k = 7; k >= 0; k--)
+            acc = acc * xi + COEF[k];
+        y[i] = acc;
+    }
 }
 
 // ---------------- 以下是判测与计时，不要修改 ----------------
@@ -32,13 +46,15 @@ typedef void (*poly_fn)(const float *, float *, const float *, int);
 
 static float run_one(poly_fn fn, const char *name, const float *d_x, float *d_y,
                      const float *d_coef, float *h_y, const float *h_ref, int n,
-                     int blocks, int threads) {
+                     int blocks, int threads)
+{
     CUDA_CHECK(cudaMemset(d_y, 0, (size_t)n * sizeof(float)));
     fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
     CUDA_CHECK_KERNEL();
     CUDA_CHECK(cudaMemcpy(h_y, d_y, (size_t)n * sizeof(float),
                           cudaMemcpyDeviceToHost));
-    if (!check_close(h_y, h_ref, n, 1e-3f)) {
+    if (!check_close(h_y, h_ref, n, 1e-3f))
+    {
         printf("%s: FAIL\n", name);
         emit_result("4.3", "fail", "{}");
         exit(1);
@@ -47,14 +63,16 @@ static float run_one(poly_fn fn, const char *name, const float *d_x, float *d_y,
     const int reps = 100;
     GpuTimer timer;
     timer.start();
-    for (int r = 0; r < reps; r++) fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
+    for (int r = 0; r < reps; r++)
+        fn<<<blocks, threads>>>(d_x, d_y, d_coef, n);
     float ms = timer.stop_ms() / reps;
     CUDA_CHECK_KERNEL();
     printf("%s: PASS  平均 %.4f ms\n", name, ms);
     return ms;
 }
 
-int main() {
+int main()
+{
     const int n = 1 << 24;
     size_t bytes = (size_t)n * sizeof(float);
     float h_coef[8] = {1.f, -0.5f, 0.25f, -0.125f, 0.0625f, -0.03125f, 0.015625f, -0.0078125f};
@@ -63,10 +81,13 @@ int main() {
     float *h_y = (float *)malloc(bytes);
     float *h_ref = (float *)malloc(bytes);
     fill_random(h_x, n, 5);
-    for (int i = 0; i < n; i++) h_x[i] = h_x[i] * 0.1f;  // 压到 [0,1) 附近防溢出
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++)
+        h_x[i] = h_x[i] * 0.1f; // 压到 [0,1) 附近防溢出
+    for (int i = 0; i < n; i++)
+    {
         float acc = 0.f;
-        for (int k = 7; k >= 0; k--) acc = acc * h_x[i] + h_coef[k];
+        for (int k = 7; k >= 0; k--)
+            acc = acc * h_x[i] + h_coef[k];
         h_ref[i] = acc;
     }
 
@@ -78,6 +99,7 @@ int main() {
     CUDA_CHECK(cudaMemcpy(d_coef, h_coef, sizeof(h_coef), cudaMemcpyHostToDevice));
 
     // TODO：把 h_coef 拷进你声明的 __constant__ 数组（cudaMemcpyToSymbol）。
+    CUDA_CHECK(cudaMemcpyToSymbol(COEF, h_coef, sizeof(h_coef)));
 
     int threads = 256;
     int blocks = (n + threads - 1) / threads;
