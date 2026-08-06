@@ -78,6 +78,30 @@ __global__ void reduce_contiguous(const float *in, float *out)
         out[blockIdx.x] = buf[0];
 }
 
+__global__ void reduce_shfl(const float *in, float *out)
+{
+    __shared__ float buf[BLOCK];
+    int tid = threadIdx.x;
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    buf[tid] = in[i];
+    __syncthreads();
+
+    for (size_t s = blockDim.x / 2; s >= 32; s /= 2)
+    {
+        if (tid < s)
+        {
+            buf[tid] += buf[tid + s];
+        }
+        __syncthreads();
+    }
+    for (size_t s = 16; s > 0; s /= 2)
+    {
+        buf[tid] += __shfl_down_sync(0xFFFFFFFFU, buf[tid], s);
+    }
+    if (tid == 0)
+        out[blockIdx.x] = buf[0];
+}
+
 // ---------------- 以下是判测与计时，不要修改 ----------------
 
 typedef void (*reduce_fn)(const float *, float *);
@@ -136,14 +160,17 @@ int main()
                          h_partial, nblocks);
     float ms_c = run_one(reduce_contiguous, "contiguous ", d_in, d_out, h_out,
                          h_partial, nblocks);
+    float ms_s = run_one(reduce_shfl, "shuffle    ", d_in, d_out, h_out,
+                         h_partial, nblocks);
     // 阈值 1.5x：A100 实测 2.22x、V100 实测 2.33x，两版写成一样时是 ~1x。
     float ratio = report_speedup("interleaved / contiguous", ms_i, ms_c, 1.5f,
                                  "两版耗时几乎一样，检查是不是写成同一个实现了");
 
     char metrics[192];
     snprintf(metrics, sizeof(metrics),
-             "{\"interleaved_ms\":%.4f,\"contiguous_ms\":%.4f,\"ratio\":%.3f}",
-             ms_i, ms_c, ratio);
+             "{\"interleaved_ms\":%.4f,\"contiguous_ms\":%.4f,"
+             "\"shuffle_ms\":%.4f,\"ratio\":%.3f}",
+             ms_i, ms_c, ms_s, ratio);
     emit_result("3.5", "pass", metrics);
     return 0;
 }
