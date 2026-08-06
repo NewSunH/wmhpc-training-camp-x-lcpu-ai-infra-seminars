@@ -451,14 +451,14 @@ make run/m3_simt/03_reduce
 \begin{center}\small
   \begin{tabular}{@{}lp{8em}p{7em}p{6em}p{8em}@{}}
     \toprule
-    空间            & 谁可见  & 生命周期 & 片上 / 片外 & 谁管理 \\
+    空间            & 谁可见               & 生命周期  & 片上 / 片外  & 谁管理 \\
     \midrule
-    register      & 单个线程 & 线程   & 片上      & 编译器 \\
-    local         &      &      &         &     \\
-    shared        &      &      &         &     \\
-    global        &      &      &         &     \\
-    constant      &      &      &         &     \\
-    L1 / L2 cache &      &      &         &     \\
+    register      & 单个线程              & 线程    & 片上       & 编译器 \\
+    local         & 单个线程              & 线程    & 片外       & 编译器 \\
+    shared        & 同一 block          & block & 片上       & 程序员 \\
+    global        & 整个 grid           & 应用程序  & 片外       & 程序员 \\
+    constant      & 整个 grid（只读）       & 应用程序  & 片外（片上缓存） & 程序员 \\
+    L1 / L2 cache & L1：单个 SM；L2：全 GPU & 硬件决定  & 片上       & 硬件  \\
     \bottomrule
   \end{tabular}
 \end{center}
@@ -481,11 +481,13 @@ make run/m4_memory/02_constant_coeff
 
 结果会包含两个版本的耗时（差距可能极小，甚至测不出来性能收益——想想为什么），回答 constant cache 真正的优势在哪种访问模式。
 
+Constant cache 最适合一个 warp 内所有线程读取同一地址的访问模式，此时一次读取可以广播给整个 warp。本题所有线程在同一轮都读取相同的COEF[k]，符合该模式；但系数表仅有 32 字节，global 版本也很容易命中缓存，而且 kernel 还包含全局数组读写和依赖的浮点运算，因此 constant memory 未必带来可测的提速。若同一 warp 读取多个不同 constant 地址，请求会按不同地址拆分，优势会减弱。
+
 \prob{4.4}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item local memory 的“local”指作用域私有，它实际上在片外显存里。
-  \item 对数组用运行期才知道的下标做索引，可能迫使它被放进 local memory。
+  \item local memory 的“local”指作用域私有，它实际上在片外显存里。（对）
+  \item 对数组用运行期才知道的下标做索引，可能迫使它被放进 local memory。（对）
 \end{enumerate}
 
 \prob{4.5}{FILL-IN}[cuda/m4\_memory/03\_histogram.cu]
@@ -519,12 +521,19 @@ make run/m4_memory/05_bandwidth
 \begin{center}\small
   \begin{tabular}{@{}lcccccc@{}}
     \toprule
-    stride & 1 & 2 & 4 & 8 & 16 & 32 \\
+    stride & 1      & 2      & 4     & 8     & 16    & 32    \\
     \midrule
-    GB/s   &   &   &   &   &    &    \\
+    GB/s   & 1899.5 & 1187.4 & 733.6 & 542.2 & 628.3 & 899.9 \\
     \bottomrule
   \end{tabular}
 \end{center}
+
+带宽从 stride 1 到 8 明显下降，因为 warp 内相邻线程访问的地址逐渐分散，
+一次内存事务中真正使用的数据比例降低，访存合并效果变差。stride 继续增大
+时带宽反而回升，这是因为 $n$ 和 stride 都是 2 的幂：stride 为 $s$ 时，
+映射 $(i\times s)\bmod n$ 只会访问 $n/s$ 个不同输入，每个输入被重复读取
+$s$ 次。输入工作集因此从 64 MiB 逐渐缩小到 2 MiB，增强的缓存复用开始
+抵消非合并访问的代价，所以结果并不单调下降。
 
 \prob{4.8}{EXPERIMENT}[cuda/m4\_memory/06\_occupancy.cu]
 \texttt{06\_occupancy.cu}，详细内容见相关文件。实验命令如下：
@@ -536,18 +545,43 @@ make run/m4_memory/06_occupancy
 
 记录实验数据：
 
+设备为 NVIDIA GeForce RTX 5090，每个 SM 有 100 KB shared memory，
+每个 SM 最多常驻 1536 个线程。
+
 \begin{center}\small
   \begin{tabular}{@{}lcccccc@{}}
     \toprule
-    shared memory / block (KB) &  &  &  &  &  & \\
-    理论驻留 block / SM            &  &  &  &  &  & \\
-    occupancy                  &  &  &  &  &  & \\
-    实测带宽 (GB/s)                &  &  &  &  &  & \\
+    shared memory / block (KB) & 0.0     & 13.2    & 15.0    & 18.0   & 29.0   & 55.0   \\
+    理论驻留 block / SM            & 6       & 6       & 6       & 5      & 3      & 1      \\
+    occupancy                  & 100.0\% & 100.0\% & 100.0\% & 83.3\% & 50.0\% & 16.7\% \\
+    实测带宽 (GB/s)                & 1575.1  & 1573.2  & 1574.5  & 1575.7 & 1578.9 & 824.3  \\
     \bottomrule
   \end{tabular}
 \end{center}
 
+\texttt{cudaOccupancyMaxPotentialBlockSize} 在 shared memory 为 0 时建议
+block size 为 768。
+
 请回答：(a)~用程序开头打印的“shared memory / SM”和“最大常驻线程 / SM”，手算其中一个的驻留 block 数和 occupancy，和 API 的结果对照。(b)~带宽为什么随 occupancy 下降？用“延迟隐藏需要足够多的常驻 warp”组织你的解释。(c)~表中带宽随 occupancy 单调下降，但明显不成正比——从 100\% 到 75\% 带宽掉了多少？从 37.5\% 到 12.5\% 又掉了多少？试解释这个差别。
+
+\begin{enumerate}[label=(\alph*)]
+  \item 以每 block 使用 29.0 KB shared memory 为例，共享内存限制给出的
+        驻留数为 $\lfloor 100/29\rfloor=3$，线程数限制给出的驻留数为
+        $\lfloor 1536/256\rfloor=6$，所以最终每个 SM 可驻留 3 个 block。
+        occupancy 为 $3\times256/1536=50\%$，与 API 的结果一致。
+  \item global memory 访问具有较高延迟，一个 warp 等待数据时，SM 需要
+        切换到其他常驻 warp 执行。occupancy 降低意味着可切换的 warp 和在途
+        内存请求变少；当数量不足以隐藏延迟、跑满内存系统时，带宽就会下降。
+        不过 50\% occupancy 时已有足够多的 warp，因此带宽仍处于饱和平台；
+        降到 16.7\% 后才出现明显损失。
+  \item 这块卡的档位与题目中的示例不同，而且结果并非严格单调。由
+        100\% 降至 83.3\% 时，带宽从 1575.1 GB/s 变为 1575.7 GB/s，变化
+        仅约 $0.04\%$，属于测量波动；由 50\% 降至 16.7\% 时，带宽从
+        1578.9 GB/s 降至 824.3 GB/s，下降 754.6 GB/s，即约 $47.8\%$。
+        occupancy 超过隐藏延迟所需的阈值后，继续增加并不会提高已经饱和的
+        带宽；低于该阈值后，在途请求不足，性能才会快速下降，因此二者不成
+        正比。
+\end{enumerate}
 
 \begin{lookback}
   本模块的八道题围绕同一个问题展开：数据放在哪一层，以什么模式去取。prob 4.1 给出一幅静态的存储层次地图，prob 4.2 与 4.3 在同一段 stencil 上切换存储位置，prob 4.5 与 4.6 在同一个直方图统计上做同样的变换，prob 4.7 和 4.8 则分别量化访问模式与可并发的请求数量。
@@ -575,12 +609,26 @@ make run/m5_async/01_timing_trap
 并回答下列问题：
 (a)~哪个数值可以当作 kernel 耗时写进报告？(b)~另外两个各具体测的是什么？
 
+实测 host 不等待 GPU 为 0.0024 ms，host 等待 GPU 为 0.5576 ms，
+\texttt{cudaEvent} 计时为 0.5509 ms。
+
+\begin{enumerate}[label=(\alph*)]
+  \item 应将 \texttt{cudaEvent} 测得的 0.5509 ms 作为 kernel 耗时。
+        两个 event 位于同一 stream，记录的是 GPU 时间线上夹在它们之间的
+        kernel 执行时间。
+  \item host 不等待 GPU 的 0.0024 ms 只测到了 host 提交异步 kernel
+        launch 并返回所需的时间，kernel 此时通常还没有执行完。host 等待 GPU
+        的 0.5576 ms 是从提交 kernel 到 \texttt{cudaDeviceSynchronize} 返回的
+        端到端墙钟时间，除 kernel 执行外还包含 host launch、同步调用及等待等
+        开销，因此略大于 \texttt{cudaEvent} 的结果。
+\end{enumerate}
+
 \prob{5.2}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item 同一个 stream 里的操作按提交顺序执行。
-  \item kernel 启动后，host 代码立刻继续往下执行。
-  \item unified memory 下，CPU 访问一页正被 GPU 占用的内存，会触发缺页与页迁移。
+  \item 同一个 stream 里的操作按提交顺序执行。（对）
+  \item kernel 启动后，host 代码立刻继续往下执行。（对）
+  \item unified memory 下，CPU 访问一页正被 GPU 占用的内存，会触发缺页与页迁移。（对）
 \end{enumerate}
 
 \begin{lookback}
