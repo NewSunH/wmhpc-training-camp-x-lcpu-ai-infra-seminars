@@ -33,6 +33,6 @@ def make_scale2d(M, N, block_M=32, block_N=32, dtype="float32"):
                 X_shared[i, j] = X_shared[i, j] * 2.0
 
             # ====== 空 3：把算完的 tile 写回 Y 的同一位置 ======
-            T.copy(X_shared, Y[by*block_N, bx*block_M])
+            T.copy(X_shared, Y[by*block_M, bx*block_N])
 
     return scale2d
