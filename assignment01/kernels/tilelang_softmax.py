@@ -18,11 +18,59 @@ contract：
 (Optional) 将你的实现和 torch.softmax 比较一下性能（行宽取 256/1024/4096），
 Tip: elementwise + 行内归约的 kernel 大概率是带宽瓶颈，可以想想理论上限是多少。
 """
+# pyright: reportInvalidTypeForm=false
 
 import torch
 import tilelang
 import tilelang.language as T
+from tilelang import jit
 
+_kernel_cache = {}
+
+@jit
+def make_softmax(M, N, BLOCK_N = 32):
+    threads = 256
+    @T.prim_func
+    def kernel(X:T.Tensor((M, N), "float32"),
+               Y: T.Tensor((M, N), "float32")):
+        with T.Kernel(M, threads = threads) as row:
+            values = T.alloc_fragment((BLOCK_N,), "float32")
+            row_max = T.alloc_fragment((1,), "float32")
+            row_sum = T.alloc_fragment((1,), "float32")
+            for j in T.Parallel(BLOCK_N):
+                values[j] = T.if_then_else(
+                    j < N,
+                    X[row, j],
+                    -T.infinity("float32"),)
+            T.reduce_max(values, row_max, dim=0)
+            for j in T.Parallel(BLOCK_N):
+                values[j] = T.exp(values[j] - row_max[0])
+            T.reduce_sum(values, row_sum, dim=0)
+            for j in T.Parallel(BLOCK_N):
+                if j < N:
+                    Y[row, j] = values[j] / row_sum[0]
+        return kernel
+
+
+
+            
 
 def softmax(x: torch.Tensor) -> torch.Tensor:
-    raise NotImplementedError("从这里开始写")
+
+    M, N = x.shape
+
+    if N <= 0 or N > 4096:
+        raise ValueError("N must satisfy 0 < N <= 4096")
+
+    key = (M, N)
+
+    # 编译 + 缓存都在公开函数 softmax 里
+    if key not in _kernel_cache:
+        _kernel_cache[key] = tilelang.compile(
+            make_softmax(M, N),
+            out_idx=[1],
+            target="cuda",
+        )
+
+    # 调用也在 softmax 里
+    return _kernel_cache[key](x)
