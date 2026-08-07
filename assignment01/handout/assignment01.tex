@@ -772,16 +772,36 @@ uv run pytest tests/test_tilelang.py -k copy2d
 补全下表，每个空填“用户”或“编译器”（二者都涉及的要写清楚各自的范围）。
 
 \begin{center}\small
-  \begin{tabular}{@{}lcccc@{}}
+  \begin{tabularx}{\linewidth}{@{}p{7.5em}
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X
+    >{\raggedright\arraybackslash}X@{}}
     \toprule
-    谁负责                & CUDA SIMT & cuTile & Triton & TileLang \\
+    谁负责 & CUDA SIMT                           & cuTile & Triton & TileLang \\
     \midrule
-    线程到数据的映射           & 用户        &        &        &          \\
-    边界处理               & 用户        &        &        &          \\
-    tile / block 尺寸的选择 & 用户        &        &        &          \\
-    block 内同步          & 用户        &        &        &          \\
+    线程到数据的映射
+        & 用户
+        & 编译器（用户指定 block 对应的 tile）
+        & 编译器（用户指定 program 对应的 tile）
+        & 编译器（用户给出 tile 与并行迭代域）                                            \\
+    边界处理
+        & 用户
+        & 二者：编译器处理越界，用户选择 load 的 padding
+        & 用户（显式构造 mask）
+        & 二者：\texttt{T.copy} 由编译器处理，显式索引由用户判断                              \\
+    tile / block 尺寸的选择
+        & 用户
+        & 用户
+        & 用户
+        & 用户                                                               \\
+    block 内同步
+        & 用户
+        & 编译器
+        & 编译器
+        & 二者：高层原语由编译器处理，必要时用户显式同步                                          \\
     \bottomrule
-  \end{tabular}
+  \end{tabularx}
 \end{center}
 
 \prob{7.6}{FILL-IN}[kernels/tilelang\_matmul.py]
