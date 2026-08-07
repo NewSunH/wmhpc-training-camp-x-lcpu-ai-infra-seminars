@@ -27,7 +27,7 @@ def make_scale2d(M, N, block_M=32, block_N=32, dtype="float32"):
             # ====== 空 2：把当前 tile 从 X 搬进 shared。
             #         提示：T.copy(X[行起点, 列起点], X_shared)，
             #         越界部分 T.copy 会自己处理 ======
-            T.copy(X[block_M,block_N], X_shared)
+            T.copy(X[by*block_M,bx*block_N], X_shared)
 
             for i, j in T.Parallel(block_M, block_N):
                 X_shared[i, j] = X_shared[i, j] * 2.0
