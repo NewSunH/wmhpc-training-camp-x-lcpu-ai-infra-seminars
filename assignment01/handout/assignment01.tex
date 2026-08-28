@@ -433,6 +433,8 @@ cd assignment01/cuda
 make run/m3_simt/03_reduce
 \end{lstlisting}
 
+\textcolor{gray}{（待补：interleaved / contiguous 实测耗时与比值，及性能差距解释）}
+
 \begin{lookback}
   SIMT 让你以单线程的风格编写并行代码，但它只承诺正确性语义，不负责性能语义。本模块的题目正好分别对应这层抽象漏出来的三个口子：warp 才是真实的调度单位（prob 3.2），block 内的并行需要显式同步才能看到彼此的写入（prob 3.3），而 block 之间压根没有提供同步方法（prob 3.4）。
 
@@ -512,6 +514,8 @@ make run/m4_memory/04_histogram_priv
 \end{lstlisting}
 
 测试结果包含与 naive 实现相比较的耗时、吞吐。试解释提速来自哪里。
+
+\textcolor{gray}{（待补：naive / priv 实测耗时与提速比，及提速来源的解释）}
 
 \prob{4.7}{EXPERIMENT}[cuda/m4\_memory/05\_bandwidth.cu]
 运行实验，并根据实验数据填表。
@@ -749,6 +753,8 @@ uv run pytest tests/test_fused_op.py
 
 改完回答——与 Module 2 里改 CUDA kernel 相比，这次的改动主要集中在 kernel 的什么部分？主体代码为什么一行都不用动？
 
+改动只有两处：kernel 内的计算表达式一行（\texttt{z = x * 2.0} 改为 \texttt{z = tl.maximum(x * a + b, 0.0)}），以及 kernel 签名与启动参数（把标量 \texttt{a}、\texttt{b} 传进去）。pid、offsets、mask、load/store、grid 计算这些主体代码一行未动。原因在于 Triton 的并行单位是 program（处理一个 tile），计算表达式直接写在 tile 向量上而不是逐线程的标量上：线程到数据的映射与边界处理已经由外围脚手架（pid + \texttt{tl.arange} + mask）包办，与具体计算公式无关，所以改语义只需动 tile 级的那一行。而 Module 2 的 CUDA SIMT 版里，公式和逐线程下标运算写在一起，改动要顺着线程视角重写（对照 Guide 1.2.2.3 的 tile 视角）。
+
 \prob{7.3}{FILL-IN}[kernels/tilelang\_scale\_add.py]
 请填空：\texttt{kernels/tilelang\_scale\_add.py} ，具体要求见代码注释。测试命令：
 
@@ -767,6 +773,8 @@ uv run pytest tests/test_tilelang.py -k copy2d
 \end{lstlisting}
 
 填完想一想：2.6 的四个空——行号、列号、边界保护、grid 尺寸——哪些在这里还有对应？没有对应的那个去哪了？
+
+grid 尺寸仍有直接对应：空 1 里 \texttt{T.ceildiv(N, block\_N)} 与 \texttt{T.ceildiv(M, block\_M)} 就是 2.6 空 4 两个方向向上取整的翻版。行号、列号只剩半个对应：\texttt{by * block\_M}、\texttt{bx * block\_N} 给出 tile 的起点坐标（空 2、空 3 里要自己写），而 tile 内每个元素具体由哪个线程处理已交给编译器（\texttt{T.copy}/\texttt{T.Parallel}），逐线程的 row/col 计算消失了。完全没有对应的是边界保护：它被 \texttt{T.copy} 的越界语义吃掉——搬进 shared 时自动填充越界部分、写回时自动丢弃越界写，所以不用再像 2.6 空 3 那样手写 \texttt{if (row < M \&\& col < N)}。
 
 \prob{7.5}{CONCEPT}
 补全下表，每个空填“用户”或“编译器”（二者都涉及的要写清楚各自的范围）。
@@ -814,6 +822,8 @@ uv run pytest tests/test_tilelang.py -k matmul
 
 填完回答——这五个空涉及到了 shared memory、寄存器 tile、流水，而 Triton 版 matmul（Bonus 的 \texttt{kernels/matmul\_triton.py}）并未被显式指定，为什么？
 
+因为 Triton 把这些全部收进了编译器。对照 Bonus 的 \texttt{matmul\_triton.py}：它只写 tile 级的 \texttt{tl.load}、\texttt{tl.dot} 和沿 K 的循环，shared memory 分级缓存、软件流水、累加器在寄存器里的布局都由 Triton 编译器自动安排，用户能调的旋钮只剩 BLOCK 大小（以及 \texttt{num\_warps} 这类启动参数）。而 TileLang 把存储层次和调度结构当作语言构件显式暴露出来：shared tile（\texttt{T.alloc\_shared}）、寄存器 fragment（\texttt{T.alloc\_fragment}）、显式搬运（\texttt{T.copy}）、流水结构（\texttt{T.Pipelined} + \texttt{num\_stages}）都要自己写。这是 prob 7.5 表格之外的另一条分界线：Triton 隐藏了内存层次，TileLang 把它显式化——代价是要填的空更多，好处是每一级存储和每一段流水都看得见、可控制（也便于 Bonus 里逐项调参）。
+
 \begin{capstone}{prob 7.7（FROM-SCRATCH）：softmax in TileLang \hfill {\footnotesize\ttfamily kernels/tilelang\_softmax.py}}
   在 \texttt{kernels/tilelang\_softmax.py} 里从零实现行 softmax，具体要求见文件开头的 docstring。
 \end{capstone}
@@ -833,6 +843,8 @@ cd assignment01
 uv run pytest tests/test_softmax.py
 \end{lstlisting}
 
+对比 7.7 与 7.8，归约、边界处理、按形状编译这三项其实都是用户显式处理的，区别只在“显式”的写法。归约：Triton 里写 \texttt{tl.max}/\texttt{tl.sum}（axis=0），TileLang 里写 \texttt{T.reduce\_max}/\texttt{T.reduce\_sum}（dim=0），两者都要求用户指明归约轴，编译器只负责把归约实现映射到 warp/block 的并行结构上。边界处理：Triton 用 \texttt{mask=mask, other=-inf} 传给 load/store；TileLang 用 \texttt{T.if\_then\_else(j < N, X[row, j], -inf)} 填充无效元素、最后再用 \texttt{if j < N} 守卫 store——两边都是用户手写，并非 cuTile 那种由 load/store 语义隐式处理的模式。按形状编译：两者都由 JIT 编译器隐式完成——Triton 按 \texttt{BLOCK\_SIZE} 这个 constexpr 特化并缓存，TileLang 的 \texttt{@jit} 按 (\texttt{M}, \texttt{N}, \texttt{BLOCK\_N}) 参数组合缓存；用户只负责算出 \texttt{next\_power\_of\_2(N)} 并传进去。真正被两边编译器共同接管的，是线程到数据的映射（\texttt{tl.arange} 构造 offsets vs \texttt{T.Parallel}/\texttt{T.Kernel} 的隐式划分），这一层在两种写法里都看不见 thread。
+
 \begin{lookback}
   本模块把前面写过的 kernel 用 TileLang 和 Triton 各重写了一遍。两种写法的区别，基本都收在 prob 7.5 那张对比表里：线程到数据的映射归谁管，边界归谁处理，tile 尺寸归谁选定，同步又归谁插入。DSL 的价值并不在于代码更短，而在于它把前两项交给编译器，同时把后两项——那些必须靠实测才能定下来的旋钮——继续留给你。
 
@@ -849,11 +861,13 @@ uv run pytest tests/test_softmax.py
 \prob{8.1}{CONCEPT}
 判断对错，可以顺带补一句理由。
 \begin{enumerate}[label=(\alph*)]
-  \item PTX 是 GPU 直接执行的机器码。
-  \item 只嵌入了 \texttt{sm\_70} SASS 的可执行文件，能在 compute capability 9.0 的卡上运行。
-  \item 一个 fatbin 可以同时携带多个架构的 SASS 和 PTX。
-  \item JIT 编译由驱动在运行时完成。
+  \item PTX 是 GPU 直接执行的机器码。（错）
+  \item 只嵌入了 \texttt{sm\_70} SASS 的可执行文件，能在 compute capability 9.0 的卡上运行。（错）
+  \item 一个 fatbin 可以同时携带多个架构的 SASS 和 PTX。（对）
+  \item JIT 编译由驱动在运行时完成。（对）
 \end{enumerate}
+
+PTX 是虚拟 ISA（中间表示），GPU 直接执行的是 SASS；PTX 要经 \texttt{ptxas} 离线编译、或由驱动在运行时 JIT 成 SASS 后才能执行（Guide 2.1.1）。SASS 与具体 compute capability 绑定，只含 \texttt{sm\_70} SASS 的可执行文件无法在 9.0 的卡上运行，需要 fatbin 携带对应架构的 SASS，或用 PTX 兜底。fatbin 本身是容器，可以同时打包多个架构的 SASS 和 PTX，运行时从中挑选；JIT 这一步由驱动完成（Guide 1.3.2）。
 
 \prob[Optional]{8.2}{EXPERIMENT}[cuda/m0\_env/01\_hello.cu]
 两个编译实验，对象是 Module 0 的 \texttt{01\_hello.cu}。
@@ -874,8 +888,12 @@ make ptxonly/m0_env/01_hello
 ./bin/m0_env/01_hello_ptxonly
 \end{lstlisting}
 
+\textcolor{gray}{（待补：(a) sass-only 版本的报错信息；(b) ptx-only 版本能否运行，以及 PTX 在何时、由谁编译成该卡的机器码）}
+
 \prob[Optional]{8.3}{CONCEPT}
 请简单说明 Runtime API 与 Driver API 各自的定位。\texttt{cudaMalloc} 属于哪个？
+
+Runtime API（\texttt{cuda\_runtime.h}，libcudart）是 Driver API 之上的高层封装：隐式完成设备初始化与 primary context 管理，提供模板化的 kernel 启动语法以及事件、流等便利设施，面向常规应用程序开发。Driver API（\texttt{cuda.h}，libcuda）贴近驱动、粒度更细：\texttt{cuInit}/\texttt{cuCtxCreate}/\texttt{cuModuleLoad} 等都要显式调用，能精细控制多设备、多上下文、模块加载与 JIT，面向库与工具链开发者（CUDA runtime 本身也构建在它之上，Guide 1.3）。\texttt{cudaMalloc} 属于 Runtime API，对应 Driver API 的 \texttt{cuMemAlloc}。
 
 \begin{lookback}
   Module 0 里那个“能跑就行”的 hello，现在被拆开重新看过：源码经 nvcc 分成 host 和 device 两路，device 端产出 PTX 与 SASS，一并打包进 fatbin；运行时 driver 再从中挑选合适的版本，或者对 PTX 做 JIT。
@@ -897,18 +915,26 @@ cd assignment01/cuda
 make run/bonus/matmul
 nvcc -O2 -std=c++17 -I. -arch=native -DBS=8 -o bin/bonus/matmul_bs8 bonus/matmul.cu && ./bin/bonus/matmul_bs8
 \end{lstlisting}
+
+        \textcolor{gray}{（待补：BS=8/16/32 实测数据）}
   \item Tiled Triton：\texttt{kernels/matmul\_triton.py}（多组 tile 配置 + cuBLAS 对照），记录实测数据。
         \begin{lstlisting}
 cd assignment01
 uv run python -c "from kernels.matmul_triton import bench; bench()"
 \end{lstlisting}
+
+        \textcolor{gray}{（待补：各 tile 配置实测数据）}
   \item TileLang：\texttt{kernels/tilelang\_matmul.py}（即 prob 7.6 补全的成品），调 \texttt{bench()} 的 \texttt{block\_M / block\_N / block\_K / num\_stages}，记录实测数据。
         \begin{lstlisting}
 cd assignment01
 uv sync --extra tilelang
 uv run python -c "from kernels.tilelang_matmul import bench; bench()"
 \end{lstlisting}
+
+        \textcolor{gray}{（待补：各 block\_M/block\_N/block\_K/num\_stages 配置实测数据）}
 \end{enumerate}
+
+\textcolor{gray}{（待补：三组实测数据对比与性能差距分析）}
 
 试分析性能差距的原因，特别是：TileLang 的控制粒度比 Triton 更细，为什么在这组测试里反而略慢？
 
