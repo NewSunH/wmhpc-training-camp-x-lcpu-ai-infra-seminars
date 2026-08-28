@@ -66,15 +66,22 @@ make run/m0_env/01_first_mma
 
 | 量 | 5090 | B300 |
 |---|---|---|
-| bf16 FLOP/cycle/SM | | |
-| bf16 峰值(TFLOPS) | | |
-| fp8 峰值(TFLOPS) | | |
-| fp4 峰值(TFLOPS) | | |
-| datasheet 对照值与口径差异 | | |
-| HBM/GDDR 带宽(GB/s) | | |
-| 机器平衡点(FLOP/byte，bf16) | | |
+| bf16 FLOP/cycle/SM | 1024 | 8192 |
+| bf16 峰值(TFLOPS) | 419.1 | 2500 |
+| fp8 峰值(TFLOPS) | 838.2 | 5000 |
+| fp4 峰值(TFLOPS) | 1676.4 | 10000（宽度折算） |
+| datasheet 对照值与口径差异 | 官方只给 fp32 104.8 TF 与 3352 AI TOPS；3352 = 2×1676.4，即 AI TOPS 口径是 fp4 sparse，与折算一致 | 官方 bf16 2.5 PF / NVFP4 15 PF 对应 160 SM 全规格；本集群 B300 SXM6 AC 实测 148 SM，NVFP4 口径比宽度折算高 ~1.4× |
+| HBM/GDDR 带宽(GB/s) | 1792（GDDR7 512-bit @28 Gbps） | 8000（HBM3e 288 GB） |
+| 机器平衡点(FLOP/byte，bf16) | 234 | 313 |
 
-根据 bf16 峰值和显存带宽计算机器平衡点（FLOP/byte），并与单条 mma 的计算强度（S016，m16n8k16 fp16 为 3.2 FLOP/byte）比较。思考两者之间的差距意味着什么，以及为什么后续 M2--M4 需要从数据供给路径入手优化。
+**口径**：dense（不用 2:4 sparse）、FMA 计作 2 FLOP、boost 频率；fp8/fp4 按 dtype 宽度减半、吞吐翻倍折算。
+
+推导（硬件参数来自集群实测与官方 datasheet）：
+
+- 5090：170 SM × 2.41 GHz（官方 boost；实测当前 2.40 GHz、Max 3.09 GHz）。官方 fp32 = 21760 core × 2 × 2.41 GHz = 104.8 TF，bf16 按惯例 = 4× fp32 = 419.2 TF；于是 bf16 FLOP/cycle/SM = 419.1e12 / (170 × 2.41e9) $\approx$ 1024，fp8 = 2× → 838.2 TF，fp4 = 4× → 1676.4 TF。官方页面的 3352 AI TOPS = 1676.4 × 2，即官方 TOPS 口径是 **fp4 sparse**，与推导自洽。显存 GDDR7 512-bit @ 28 Gbps = 1792 GB/s（官方 1.79 TB/s）。平衡点 = 419.1e12 / 1792e9 $\approx$ 234 FLOP/byte。
+- B300：本集群为 **B300 SXM6 AC，实测 148 SM、Max SM clock 2032 MHz、HBM3e 7680-bit 288 GB**。Blackwell 数据中心 SM 的 bf16 速率取 8192 FLOP/cycle/SM，则本卡峰值 = 148 × 2.032e9 × 8192 $\approx$ 2.46 PF，与官方 2.5 PF 一致（差在官方 160 SM / 时钟口径）；fp8 $\approx$ 4.9 PF，fp4 宽度折算 $\approx$ 9.9 PF。官方 "15 PF dense NVFP4" 对应 160 SM 全规格、且 NVFP4 速率是 bf16 的 6×（较 B200 的 fp4 再提 1.5×），折算到本卡 $\approx$ 13.9 PF，与 DGX B300 页面 108 PF/8 卡 = 13.5 PF/卡相符——这就是本行与"宽度折算"差异的来源。显存带宽 8 TB/s。平衡点 = 2.5e15 / 8e12 $\approx$ 313 FLOP/byte。
+
+与单条 mma 对比：m16n8k16 fp16 的计算强度只有 3.2 FLOP/byte（S016），而两台机器的平衡点是 234 / 313 FLOP/byte——**单条 mma 的强度约为平衡点的 1/70--1/100**。这意味着操作数若从 DRAM 现取现用，带宽会先于算力耗尽，kernel 只能跑出零头性能。要逼近峰值必须在片上复用数据（沿 K tiling、操作数驻留 smem/寄存器）并把搬运与计算重叠——这正是 M2（descriptor/swizzle 供数布局）到 M4（TMA + 多级流水）沿数据供给路径优化的原因。
 
 ### 0.3 {.prob type=CONCEPT}
 
