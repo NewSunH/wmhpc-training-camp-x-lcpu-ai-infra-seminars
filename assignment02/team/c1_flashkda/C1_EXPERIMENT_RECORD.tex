@@ -1056,4 +1056,49 @@ NCU 记录新 smem/regs/occupancy，event benchmark 与原 K2 的端到端时间
 不能污染已验证的基线路径。
 \end{record}
 
+\clearpage
+\section{第三轮：2-CTA/head 列切分 prototype}
+
+\subsection{R3.1：reference-level 列切分 oracle}
+
+第三轮的目标是把 R2.2 的列独立推导落实为可执行的正确性前置检查，随后才进入
+CUDA implementation。新增 \code{challenge/vsplit\_reference\_probe.py}，它不
+调用 FlashKDA extension，也不测量性能；它复用官方 \code{torch\_ref.py} 的
+L2 normalization、gate、Neumann inverse、bf16 cast 及 fp32 FMA 数值顺序，
+但将每个 head 的 value dimension 分为 \([0,64)\) 和 \([64,128)\) 两段。
+
+每一段读取同一份全宽 \(Q/K\) side 中间量，但只读取和更新自己的
+\code{state[V\_slice,K]}、\code{v[:,V\_slice]} 与 output columns。该 oracle
+对未切分 \code{torch\_ref} 的 output/final state 做 exact 对拍。若 reference
+层就无法 exact，则取消 CUDA 列切分；若通过，才说明把 state/output TMA layout
+分列是一个数值上可继续实现的候选。
+
+计划在 B300 的 GPU allocation 中运行下列矩阵：
+
+\begin{lstlisting}
+ssh infrab300
+export C1_REPO=/home/lcpu/<user>/<repo>
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+
+srun --partition=gpu --gres=gpu:1 --time=00:20:00 --chdir="$C1_FLASH" \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -u \
+    ../challenge/vsplit_reference_probe.py --T 16 --split 64 --seed 0
+srun --partition=gpu --gres=gpu:1 --time=00:20:00 --chdir="$C1_FLASH" \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -u \
+    ../challenge/vsplit_reference_probe.py --T 17 --split 64 --seed 0
+srun --partition=gpu --gres=gpu:1 --time=00:20:00 --chdir="$C1_FLASH" \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -u \
+    ../challenge/vsplit_reference_probe.py --T 64 --split 64 --seed 0
+\end{lstlisting}
+
+\begin{record}{R3.1 验收条件}
+三个长度必须同时满足 output 与 final state 的 \code{torch.equal}；\(T=16\)
+覆盖单 chunk，\(T=17\) 覆盖首次跨 chunk state 传递，\(T=64\) 覆盖四次连续
+state 更新。通过仅证明列切分的 reference 语义，不能代替 CUDA prototype 的
+正确性、NCU 或 benchmark。
+\end{record}
+
 \end{document}
