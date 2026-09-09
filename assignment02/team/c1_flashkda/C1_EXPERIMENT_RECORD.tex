@@ -200,7 +200,7 @@ K1/K2 分离和 chunk 状态依赖共同设计的整体。后续替换 tcgen05 �
 
 \subsection{SSH 和 Slurm 使用约定}
 
-用户提供两个 SSH alias：
+实验使用两个 SSH alias：
 
 \begin{lstlisting}
 ssh infra5090
@@ -792,7 +792,7 @@ srun --partition=gpu --gres=gpu:1 --time=00:20:00 \
 5 & v2 SM100 专版决策 & 将可移植性、工程成本、峰值潜力组织成最终结论 \\
 \end{longtable}
 
-\begin{record}{给第二轮的实验纪律}
+\begin{record}{第二轮实验纪律}
 每一个新数字前都记录 GPU、commit、输入 shape、seed、state dtype、
 warmup/iters/repeats 和是否处于 profiler。C1 的价值不在于写出一条
 「用了 tcgen05」的结论，而在于把 tile、数值范围、状态依赖和实测指标连接为
@@ -925,15 +925,15 @@ T8192-H96 & \((8192,96,\mathrm{fp32})\) & 9110/100663296 (0.0625; $>1$ ulp: 3177
 该 case 有 3177 个 output mismatch 超过相邻 bf16 表示值的一步，最大值为
 0.0625。因此报告同时保存计数、最大值和均值，不能只展示一个平均相对误差。
 
-\begin{decision}{R2.1 可以和不可以得出的结论}
-\textbf{可以：} 5090 的 strict mismatch 是可重复的；它在 \(T=16\) 的单
+\begin{decision}{R2.1 的结论边界}
+\textbf{证据支持：} 5090 的 strict mismatch 是可重复的；它在 \(T=16\) 的单
 chunk case 已出现，所以不能归咎于跨 chunk recurrence；H=1 时仍有 55 个
 output mismatch，因此也不能归咎于 ``多 head 才会出错''；bf16/fp32 的公开
 state 接口使 H=96 的 output/state mismatch 计数完全相同，支持第一轮的源码
 发现---它没有改变内部 bf16 recurrence。相同诊断在 B300 的所有 case 均 exact，
 也复核了第一轮 B300 结论。
 
-\textbf{不可以：} 这还没有证明 5090 kernel 算法错误，更不能从两张不同设备
+\textbf{证据尚不足以支持：} 这还不能证明 5090 kernel 算法错误，更不能从两张不同设备
 推出唯一根因。两边 GPU capability 不同，Python 小版本也不同；尽管 Torch/CUDA
 版本、脚本、seed、输入规则、TF32 设置和 extension API 一致，仍需下一步用
 SASS/编译选项、reference 中 \code{load\_inline} 生成的 JIT kernel 以及更小
@@ -946,7 +946,7 @@ SASS/编译选项、reference 中 \code{load\_inline} 生成的 JIT kernel 以�
 \code{results/diagnose\_5090\_boundary.log} 与 \code{.json} 是 job 9875 的
 stdout/结构化摘要；\code{results/diagnose\_b300\_boundary\_path.log} 与
 \code{.json} 是 job 23442 的成功记录；\code{diagnose\_b300\_boundary\_no\_venv\_path.log}
-保留 job 23441 的 PATH 失败。这些均为小文件，将随本轮 commit 进入 git。
+保留 job 23441 的 PATH 失败。这些均为小文件，已作为本轮证据进入 git。
 \end{record}
 
 \subsection{R2.2：K2 并行度的资源上界与候选方案筛选}
@@ -981,7 +981,7 @@ job 23452 内读取设备属性；输出保存在
 \code{results/k2\_resource\_limits\_b300.log}：148 SM、每 SM 2048 threads、
 233,472 B shared memory、65,536 registers。第一次 job 23451 还尝试读取
 PyTorch 不提供的 \code{regs\_per\_block} 属性，已打印前述有效字段后以
-\code{AttributeError} 结束；不将其静默删除。
+\code{AttributeError} 结束；该失败保留在实验记录中。
 
 实际执行的成功命令等价于：
 
@@ -1052,7 +1052,7 @@ NCU 记录新 smem/regs/occupancy，event benchmark 与原 K2 的端到端时间
 \begin{record}{R2.2 的结论强度}
 已经量化了官方 H=96 K2 的 grid/SM 不匹配和 smem 的两-CTA 上界，也从源码验证
 了列独立这一必要条件。尚未实现 2-CTA kernel，因而不能声称 occupancy 提升、
-也不能声称会有端到端收益。下一次代码改动必须是隔离的 compile-time prototype，
+也不能声称会有端到端收益。R2.3 的代码改动必须是隔离的 compile-time prototype，
 不能污染已验证的基线路径。
 \end{record}
 
