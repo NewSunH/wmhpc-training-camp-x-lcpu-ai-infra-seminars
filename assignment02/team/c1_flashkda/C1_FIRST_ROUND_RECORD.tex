@@ -1,0 +1,780 @@
+% C1 FlashKDA 第一轮实验记录
+% 编译：latexmk -xelatex -interaction=nonstopmode C1_FIRST_ROUND_RECORD.tex
+% 这是过程记录，不是答辩稿。集群目录中的 <user>/<repo> 是脱敏占位符。
+\documentclass[11pt,a4paper,fontset=none]{ctexart}
+\setCJKmainfont[BoldFont={Noto Serif CJK SC Bold}]{Noto Serif CJK SC}
+\setCJKsansfont[BoldFont={Noto Sans CJK SC Bold}]{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans CJK SC}
+\usepackage{geometry}
+\geometry{margin=2.3cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array,multirow,longtable,tabularx}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=2em}
+\usepackage{xcolor}
+\definecolor{accent}{RGB}{28,60,120}
+\definecolor{codebg}{RGB}{248,248,246}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\definecolor{strgreen}{RGB}{21,101,42}
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{gray!40}, framerule=0.4pt,
+  breaklines=true, columns=fullflexible, keepspaces=true,
+  showstringspaces=false, language=bash,
+  morekeywords={make,nvcc,uv,pytest,python,cd,ncu,nvdisasm,cuobjdump,srun,sinfo,squeue,ssh,scp},
+  commentstyle=\color{gray!130}\itshape,
+  keywordstyle=\color{accent}\bfseries,
+  stringstyle=\color{strgreen},
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+\usepackage{hyperref}
+\hypersetup{colorlinks, linkcolor=accent, urlcolor=accent}
+\Urlmuskip=0mu plus 1mu
+\emergencystretch=3em
+\pagestyle{plain}
+\setlength{\LTpre}{0.6em}
+\setlength{\LTpost}{0.6em}
+
+\newtcolorbox{record}[1]{enhanced,breakable,
+  colback=gray!5,colframe=gray!50,boxrule=0.5pt,arc=1.5pt,
+  left=7pt,right=7pt,top=5pt,bottom=5pt,
+  title={#1},fonttitle=\bfseries\sffamily\small,coltitle=black,
+  attach title to upper={\quad}}
+\newtcolorbox{decision}[1]{enhanced,breakable,
+  colback=accent!4,colframe=accent!70,boxrule=0.7pt,arc=1.5pt,
+  left=7pt,right=7pt,top=5pt,bottom=5pt,
+  title={#1},fonttitle=\bfseries\sffamily}
+\newcommand{\FlashKDA}{\textsc{FlashKDA}}
+\newcommand{\Fla}{\textsc{FLA}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+\begin{center}
+  {\LARGE\bfseries C1：FlashKDA 第一轮实验全记录}\\[6pt]
+  {\sffamily 作业 2 Team / 可审计实验日志（不是答辩版本）}
+\end{center}
+\vspace{0.5em}\hrule\vspace{1em}
+
+\begin{record}{文档范围与使用说明}
+本文事无巨细地记录 C1 第一轮：题目与源码阅读、两套 Slurm 集群的接入和
+环境构建、FlashKDA extension 的编译、官方正确性和 benchmark、NCU/SASS
+检查、SM100 tcgen05 正反例、CHUNK 数值范围 probe、state 精度 probe。
+文中的命令均来自实际执行过程；为避免把个人用户名、IP 和绝对目录写进
+git，使用 \code{/home/lcpu/<user>/<repo>} 和环境变量占位符。
+
+轻量日志已经版本控制在 \code{results/}。完整 NCU report 约 90\,MiB，
+两份 SASS dump 也较大，按 \code{.gitignore} 仅保留在实验运行环境；
+关键命令、计数和指标均在本文中展开记录。
+\end{record}
+
+\tableofcontents
+\clearpage
+
+\section{题目、范围和第一轮拆分}
+
+\subsection{C1 要回答的问题}
+
+C1 的题面是「FlashKDA---官方 kernel 停在 SM80 MMA」。目标不仅是让项目
+运行，而是建立或推翻如下解释：在 B300/GB200 等 Blackwell 上，
+\FlashKDA{} 为什么依然使用 SM80 风格 \code{mma.sync}/HMMA，而不使用
+SM90 WGMMA 或 SM100 \code{tcgen05}。
+
+题面给出三个层次：第一层在 B300 上复现并用 NCU/SASS 验证；第二层回答
+CHUNK、tcgen05 tile、递推并行度、瓶颈、state 精度和 SM100 专版决策六个
+讨论点；第三层从「只换指令」「大 CHUNK + rescale」「并行度重构」任选一条
+动手。题面允许负结果，但必须用代码、数据和设计分析说明负在哪里。
+
+\subsection{第一轮的策略}
+
+第一轮刻意不修改生产 \FlashKDA{} kernel。先建立可复现的正确性、性能和
+instruction 基线；之后选风险最低且最能排除错误直觉的挑战切面：
+验证 tcgen05 是否可直接替换 \(16\times16\) SM80 MMA。并行度重构和大 CHUNK
+都会同时改变数据布局、数值和性能，不适合在没有基线时盲改。
+
+\begin{longtable}{@{}L{0.13\linewidth}L{0.32\linewidth}L{0.34\linewidth}L{0.13\linewidth}@{}}
+\toprule
+编号 & 子问题 & 第一轮方法 & 状态 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+P0 & 两台集群能否构建与运行？ & SSH/Slurm probe；GPU allocation 内检查 & 完成 \\
+P1 & 生产路径是否仍是 SM80？ & 源码定位、NCU、SASS 计数 & 完成 \\
+P2 & B300 正确性是否通过？ & 官方 fixed、varlen、FLA 对拍 & 完成 \\
+P3 & H=96 基线速度是多少？ & 官方 30/200/5 event benchmark & 完成 \\
+P4 & K1/K2 的资源形态？ & NCU 指标和源码资源映射 & 初步完成 \\
+P5 & tcgen05 能否直接换掉 16x16 atom？ & CUTLASS 正例 + 16x16 编译负例 & 完成 \\
+P6 & 大 CHUNK 最先坏在哪里？ & gate cumulative exponent bf16 range probe & 初步完成 \\
+P7 & fp32 state 是否内部真为 fp32？ & 源码路径 + 三方精度 probe & 初步完成 \\
+P8 & 如何增加 K2 并行度？ & 候选方案和资源上界 & 第二轮 \\
+\end{longtable}
+
+\section{代码树、版本和源码阅读记录}
+
+\subsection{目录和版本}
+
+\begin{longtable}{@{}L{0.29\linewidth}L{0.24\linewidth}L{0.37\linewidth}@{}}
+\toprule
+路径 & 角色 & 第一轮使用方式 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\code{TASK.md} & C1 题面 & 三层任务、官方 shape、讨论点和验收口径 \\
+\code{FlashKDA/} & Moonshot 快照 & CUDA kernel、测试、benchmark、设计文档 \\
+\code{fla\_kda\_ref/} & FLA reference 快照 & PyTorch/Triton 对照与接口语义 \\
+\code{challenge/} & 第一轮新增 & tcgen05、range/state probe、构建脚本 \\
+\code{results/} & 第一轮证据 & 正确性、benchmark、失败 log、probe 与 NCU CSV \\
+\end{longtable}
+
+\FlashKDA{} 快照对应题面指定的 commit \code{1ce47ea}。题面给出的 CUTLASS
+pin 是短 hash \code{5c149f5}；构建时解析并 checkout 的完整 hash 为：
+
+\begin{lstlisting}
+5c149f52a436782210263fb2f19b354443a61c6a
+\end{lstlisting}
+
+\subsection{先阅读、后构建：关键源码事实}
+
+读取顺序是 \code{TASK.md}、\code{BENCHMARK\_GB200.md}、
+\code{docs/20260420-flashkda-v1-deep-dive.md}，再进入
+\code{csrc/smxx/}。实际定位命令：
+
+\begin{lstlisting}
+cd assignment02/team/c1_flashkda
+rg -n "CHUNK|kK2Threads|SM80_16x8x16|StateFP32" \
+  FlashKDA/csrc/smxx
+sed -n '1,220p' FlashKDA/docs/20260420-flashkda-v1-deep-dive.md
+\end{lstlisting}
+
+读到的事实如下。
+
+\begin{enumerate}
+  \item \code{fwd\_launch.cu} 中是 \code{constexpr int CHUNK = 16}；
+        K1 grid 是 \code{(total\_tiles,H)}，K2 grid 是 \code{(N,H)}。
+  \item \code{utils.cuh} 使用
+        \code{SM80\_16x8x16\_F32BF16BF16F32\_TN} 和
+        \code{SM80\_16x8x16\_F16F16F16F16\_TN}。
+  \item K1 是 token-parallel：gate、L2 normalize、decay、\(L/M_{qk}\)
+        与 \(16\times16\) Neumann inverse；K2 是 head-parallel：
+        chunk recurrence、输出投影和最终 state。
+  \item K2 有 192 threads：四个 MMA warp、一个 load warp、一个 store warp。
+        每个 MMA warp 处理两个 \(16\times16\) column block。
+  \item \code{SharedStorageK2::state\_acc} 是 bf16。所谓 fp32 state
+        分支将 global fp32 转到 bf16 shared buffer，递推后再转回 fp32。
+\end{enumerate}
+
+\begin{decision}{源码层面的第一轮判断}
+当前实现是围绕 \(16\times16\times16\) SM80 atom、bf16 shared state、
+K1/K2 分离和 chunk 状态依赖共同设计的整体。后续替换 tcgen05 不是改一个
+类型别名，而是可能触及 tile、shared layout、accumulator 生命周期和 CTA
+划分的系统改动。
+\end{decision}
+
+\section{集群接入与环境确认}
+
+\subsection{SSH 和 Slurm 使用约定}
+
+用户提供两个 SSH alias：
+
+\begin{lstlisting}
+ssh infra5090
+ssh infrab300
+\end{lstlisting}
+
+二者均是 Slurm 登录节点。登录节点只做 source、日志和调度查询；所有 CUDA
+探测、编译、NCU、PyTorch CUDA 和 benchmark 都进入单卡 allocation。首轮的
+资源探测形式如下：
+
+\begin{lstlisting}
+ssh infrab300 'hostname; sinfo -o "%P %D %G %N"'
+ssh infrab300 '
+  srun --partition=gpu --gres=gpu:1 --time=00:10:00 \
+       bash -lc "hostname; nvidia-smi; nvcc --version"
+'
+
+ssh infra5090 'hostname; sinfo -o "%P %D %G %N"'
+ssh infra5090 '
+  srun --partition=lcpu-infra --gres=gpu:1 --time=00:10:00 \
+       bash -lc "hostname; nvidia-smi; nvcc --version"
+'
+\end{lstlisting}
+
+\subsection{确认到的硬件和工具链}
+
+\begin{longtable}{@{}L{0.27\linewidth}L{0.31\linewidth}L{0.31\linewidth}@{}}
+\toprule
+项目 & \code{infrab300} & \code{infra5090} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+登录节点 & \code{b300-login} & \code{slurm-login} \\
+partition & \code{gpu} & \code{lcpu-infra} \\
+实际 GPU 节点 & \code{dev-slurm} & \code{gj-5090-1} \\
+GPU & NVIDIA B300 SXM6 AC & NVIDIA GeForce RTX 5090 \\
+Compute capability & 10.3 & 12.0 \\
+Driver & 580.126.09 & 580.142 \\
+CUDA toolkit & 13.0 / 13.0.88 & 13.0 \\
+FlashKDA arch & \code{103a} & \code{120a} \\
+\end{longtable}
+
+\begin{record}{环境中的两个实际坑}
+第一，B300 登录节点的 \code{nvidia-smi} 不在 PATH；系统 Python 也没有
+\code{torch}。进入 \code{srun} 并使用 assignment venv 后，
+\code{torch.cuda.is\_available()} 才为真。第二，不能在 5090 登录节点上
+直接承担长时间 clone/compile；资源重操作全部改为调度节点或复用已验证的
+B300 文件树。
+\end{record}
+
+\section{Python 依赖、CUTLASS 和 extension 构建}
+
+\subsection{统一的远端目录变量}
+
+\begin{lstlisting}
+export C1_REPO=/home/lcpu/<user>/<repo>
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+\end{lstlisting}
+
+B300 venv 为 Python 3.12，5090 为 Python 3.10.12；两边均使用
+\code{torch 2.13.0+cu130} 和 \code{triton 3.7.1}。系统 Python 不能替换
+这个 venv。
+
+\subsection{依赖安装及其触发原因}
+
+先安装 FLA reference runtime；第一次运行官方测试后发现缺 Ninja，继续运行
+又发现测试要生成图像而缺 Matplotlib。因此两台机器在同一 venv 补齐：
+
+\begin{lstlisting}
+cd "$C1_A2"
+uv pip install --python "$C1_PY" "flash-linear-attention>=0.5.0"
+uv pip install --python "$C1_PY" ninja==1.13.2 matplotlib==3.11.1
+\end{lstlisting}
+
+得到 \code{flash-linear-attention 0.5.2}。Ninja 服务于 FLA/Triton 的
+JIT helper；Matplotlib 是 \code{tests/test\_fwd.py} 输出
+\code{plot.png}/\code{plot\_varlen.png} 的真实依赖，不是为了美化报告而装。
+
+\subsection{B300：CUTLASS checkout}
+
+\FlashKDA{} 快照没有题目指定的 CUTLASS submodule。B300 的构建流程：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+git clone --filter=blob:none --no-tags --no-checkout \
+  https://github.com/NVIDIA/cutlass.git cutlass
+cd cutlass
+git checkout --detach 5c149f52a436782210263fb2f19b354443a61c6a
+\end{lstlisting}
+
+直接以短 hash fetch 时 remote 未提供对应 ref；换成完整 commit 后成功。
+最终 B300 CUTLASS 工作树约 191\,MiB，包含
+\code{include}、\code{examples/common} 和 \code{tools/util/include}。
+
+\subsection{5090：clone 无进展后的源码传输}
+
+5090 登录节点的直接 CUTLASS clone 长时间无进展。没有删除不完整目录，也
+没有冒充它可用；改用已经验证的 B300 checkout，通过 SSH 流式 tar 传输，显式
+排除 Git metadata：
+
+\begin{lstlisting}
+ssh infrab300 "
+  tar --exclude=cutlass/.git -C \"$C1_FLASH\" -czf - cutlass
+" | ssh infra5090 "
+  tar -xzf - -C \"$C1_FLASH\"
+"
+\end{lstlisting}
+
+传输后检查 \code{include/cutlass/cutlass.h}、\code{examples/common}、
+\code{tools/util/include}。目标树约 155\,MiB；无 \code{.git} 不影响
+\code{setup.py} 所需 include 路径。
+
+\subsection{两种 arch 的 editable build}
+
+\begin{lstlisting}
+# B300
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 \
+  --chdir="$C1_FLASH" bash -lc '
+    export FLASH_KDA_CUDA_ARCHS=103a
+    export MAX_JOBS=8
+    uv pip install --python "$C1_PY" --no-build-isolation --editable .
+  '
+
+# RTX 5090
+srun --partition=lcpu-infra --gres=gpu:1 --time=00:30:00 \
+  --chdir="$C1_FLASH" bash -lc '
+    export FLASH_KDA_CUDA_ARCHS=120a
+    export MAX_JOBS=8
+    uv pip install --python "$C1_PY" --no-build-isolation --editable .
+  '
+\end{lstlisting}
+
+两次 build 均成功，Python 包显示 \code{0.0.1+86106d7}。生成的动态库分别
+是 \code{flash\_kda\_C.cpython-312-...so}（B300）和
+\code{flash\_kda\_C.cpython-310-...so}（5090）。
+
+\section{官方正确性复现}
+
+\subsection{测试覆盖和命令}
+
+\code{tests/test\_fwd.py} 覆盖 fixed
+\(B=1,T=8192,H=96,D=128\) 的 PyTorch exact equality、varlen
+\([1300,547,2048,963,271,3063]\) 的 exact equality，以及多种 gate/bias
+分布下与 FLA/Triton 的容差对拍。
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+"$C1_PY" -u tests/test_fwd.py \
+  | tee "$C1_DIR/results/test_fwd_<machine>.log"
+\end{lstlisting}
+
+实际执行时该命令位于 \code{srun --gres=gpu:1} allocation 内；这里把
+Slurm 外壳省略，仅显示可复跑的程序主体。
+
+\subsection{B300：通过}
+
+\begin{longtable}{@{}L{0.34\linewidth}L{0.54\linewidth}@{}}
+\toprule
+检查项 & 记录结果 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+fixed vs PyTorch & avg/max rtol = 0；avg/max atol = 0；exact match \\
+varlen vs PyTorch & avg/max rtol = 0；avg/max atol = 0；exact match \\
+FLA fixed 10 个 case & FlashKDA output ratio 约 \(2.92\times10^{-3}\) 到 \(4.32\times10^{-3}\)，state ratio 约 \(3.43\times10^{-3}\) 到 \(9.63\times10^{-3}\) \\
+FLA varlen 10 个 case & FlashKDA output ratio 约 \(3.03\times10^{-3}\) 到 \(5.15\times10^{-3}\)，state ratio 约 \(3.35\times10^{-3}\) 到 \(8.93\times10^{-3}\) \\
+脚本终态 & \code{Assert results: Success} \\
+\end{longtable}
+
+应严格区分：PyTorch reference 是逐元素相等；FLA/Triton 是不同数值路径，
+测试接受有限 ratio 并可能给 warning，最终仍通过。
+
+\subsection{5090：严格 equality 未通过}
+
+5090 第一个 fixed exact assertion 即停止：
+
+\begin{lstlisting}
+output | avg_rtol: 4.340156678495077e-09
+output | max_rtol: 1.3563368383984198e-06
+output | avg_atol: 7.634318066607193e-09
+output | max_atol: 0.0625
+AssertionError: output mismatch between kernel and torch ref
+\end{lstlisting}
+
+本轮只记录事实：5090 已构建并能 benchmark，但未通过
+\code{torch.equal}。上述数值很小，可能涉及架构相关舍入/FMA 顺序；然而
+allclose 分布、final state 和重复运行还未做，所以不能把原因写成定论。
+
+\section{性能基线：方法、日志和数字}
+
+\subsection{计时协议}
+
+\code{benchmarks/bench\_fwd.py} 为每个调用创建 CUDA event pair，在 warmup
+后收集 mean/min/max。比较五种路径：FlashKDA bf16 state、无 state、fp32
+global state interface，以及 FLA \code{chunk\_kda} 和
+\code{chunk\_gated\_delta\_rule}。
+
+官方 H=96 形状使用题面配置：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+"$C1_PY" -u benchmarks/bench_fwd.py \
+  --mode all --H 96 --D 128 \
+  --warmup 30 --iters 200 --repeats 5 \
+  | tee "$C1_DIR/results/bench_official_h96_<machine>.log"
+\end{lstlisting}
+
+H=64 是第一轮早期的附加实验，参数为 \code{10/50/3}；其功能是暴露 shape
+敏感性，不作为与 H=96 官方组等权的统计比较。
+
+\subsection{H=96 官方参数结果}
+
+单位是 ms，FlashKDA 使用 bf16 state。加速比定义为
+\(\text{reference mean}/\text{FlashKDA mean}\)。
+
+\begin{longtable}{@{}L{0.18\linewidth}rrrrr@{}}
+\toprule
+机器 / case & FlashKDA & chunk\_kda & 对 chunk & gdn & 对 gdn \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+B300 fixed & 1.0324 & 2.3723 & 2.298x & 1.3056 & 1.265x \\
+B300 varlen mixed & 0.8591 & 2.3905 & 2.783x & 1.3120 & 1.527x \\
+B300 varlen 1024x8 & 0.7003 & 2.3482 & 3.353x & 1.2618 & 1.802x \\
+5090 fixed & 2.6148 & 5.4165 & 2.071x & 3.0850 & 1.180x \\
+5090 varlen mixed & 2.3280 & 5.4629 & 2.347x & 3.1463 & 1.352x \\
+5090 varlen 1024x8 & 2.0546 & 5.4488 & 2.652x & 3.1189 & 1.518x \\
+\end{longtable}
+
+\subsection{H=64 附加形状}
+
+\begin{longtable}{@{}L{0.18\linewidth}rrrrr@{}}
+\toprule
+机器 / case & FlashKDA & chunk\_kda & 对 chunk & gdn & 对 gdn \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+B300 fixed & 1.6077 & 2.4776 & 1.541x & 1.3337 & 0.830x \\
+B300 varlen mixed & 1.1159 & 2.5820 & 2.314x & 1.4329 & 1.284x \\
+B300 varlen 1024x8 & 0.8034 & 2.3856 & 2.969x & 1.2686 & 1.579x \\
+5090 fixed & 2.2103 & 3.5283 & 1.596x & 2.0090 & 0.909x \\
+5090 varlen mixed & 1.6745 & 3.5726 & 2.134x & 2.0698 & 1.236x \\
+5090 varlen 1024x8 & 1.4718 & 3.6000 & 2.446x & 2.0631 & 1.402x \\
+\end{longtable}
+
+\begin{decision}{性能的第一轮结论}
+FlashKDA 在 H=96 的三类官方形状上对 FLA chunk\_kda 稳定领先，规则
+1024x8 varlen 最强。它并不在所有 shape 上胜过 gdn：B300 H=64 fixed 的
+gdn 为 1.3337\,ms，快于 FlashKDA 的 1.6077\,ms。报告必须保留这种反例。
+\end{decision}
+
+\section{NCU 和 SASS：指令及资源证据}
+
+\subsection{NCU 运行、脚本问题和修复}
+
+官方 \code{benchmarks/ncu.sh} 是有效模板，但使用 bare \code{pip}；
+uv venv 中没有该命令。保留其 kernel filter 与 profile 意图，直接调用 venv
+Python：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+ncu --set full --kernel-name-base function \
+  -k "regex:_flash_kda_fwd_(prepare|recurrence)" \
+  --clock-control none --import-source yes --source-folders . \
+  --export "$C1_DIR/results/ncu_fixed_h96_b300.ncu-rep" \
+  "$C1_PY" -u benchmarks/bench_fwd.py \
+    --mode fixed --H 96 --D 128 --warmup 0 --iters 5 --repeats 1
+\end{lstlisting}
+
+NCU 警告 6 个 CTC cross-chip metrics 无法访问；其余数据有效。profile 的
+时钟和 instrumentation 会污染时间，所以不拿其 duration 代替 event benchmark。
+
+\subsection{K1/K2 代表性指标}
+
+\begin{longtable}{@{}L{0.27\linewidth}L{0.29\linewidth}L{0.30\linewidth}@{}}
+\toprule
+指标 & K1 prepare & K2 recurrence \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Block / grid & 256 / 49152 & 192 / 96 \\
+Dynamic smem & 21.25 KiB & 98.432 KiB；allocated 约 99.456 KiB \\
+Registers/thread & --- & 73--74 \\
+Theoretical occupancy & --- & 18.75\% \\
+Achieved occupancy & 97.07\% & 约 9.37--9.38\% \\
+Compute throughput & 约 73.56\% & 约 20.8--21.0\% \\
+Memory throughput & 约 71.32\% & 约 38\% \\
+DRAM throughput & 约 34.95\% & 约 10.7--11.2\% \\
+Tensor pipe active & --- & 约 19.5--20.25\% \\
+\end{longtable}
+
+K1 有大量 tile 并行，资源利用高。K2 fixed H=96 的 grid 只有 96 CTA，
+且每 CTA 接近 100\,KiB shared state/pipeline；它呈现低 tensor 活跃度、
+低 DRAM 吞吐和状态依赖，不宜在第一轮草率贴上唯一的 memory-bound 或
+compute-bound 标签。
+
+\subsection{SASS}
+
+\begin{lstlisting}
+cuobjdump --dump-sass flash_kda_C.cpython-312-x86_64-linux-gnu.so \
+  > "$C1_DIR/results/sass/flash_kda_C.sm103.sass"
+cuobjdump --dump-sass flash_kda_C.cpython-310-x86_64-linux-gnu.so \
+  > "$C1_DIR/results/sass/flash_kda_C.sm120.sass"
+
+grep -E -c 'HMMA\.16816\.F16' results/sass/*.sass
+grep -E -c 'HMMA\.16816\.F32\.BF16' results/sass/*.sass
+grep -E -c 'WGMMA|TCGEN05' results/sass/*.sass
+\end{lstlisting}
+
+\begin{center}\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+pattern & B300 SM103 & 5090 SM120 \\
+\midrule
+\code{HMMA.16816.F16} & 24 & 24 \\
+\code{HMMA.16816.F32.BF16} & 1520 & 1520 \\
+\code{WGMMA} & 0 & 0 \\
+\code{TCGEN05} & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+所以「在 Blackwell 上运行」不等于「用 Blackwell 新 MMA」。C1 题面中
+SM80 路径仍在 Blackwell 上执行的前提，被源码和两份 SASS 同时支持。
+
+\section{SM100 challenge：tcgen05 的正例、负例和边界}
+
+\subsection{纸面约束}
+
+CUTLASS \code{cute/arch/mma\_sm100\_umma.hpp} 中
+\code{SM100\_MMA\_F16BF16\_SS} 有如下编译期限制：
+
+\begin{lstlisting}
+static_assert(M == 64 || M == 128,
+  "SM100_MMA_F16BF16 M-mode size should be 64 or 128 ...");
+static_assert((N % 8 == 0) && (8 <= N) && (N <= 256), ...);
+\end{lstlisting}
+
+生产 K2 的局部块却是 \(16\times16\times16\)，并采用 warp-local register
+accumulator。tcgen05 从 shared memory（或 TMEM）读取操作数、把 accumulator
+写入 TMEM，额外需要 TMEM allocator、completion barrier 和 TMEM-to-register
+epilogue。由此可知，直接替换 atom 名称无法保留现有数据路径。
+
+\subsection{可运行的 B300/SM103a 正例}
+
+新增 \code{challenge/tcgen05\_sm103\_gemm.cu}，来源是 pin 后 CUTLASS 的
+\code{examples/cute/tutorial/blackwell/01\_mma\_sm100.cu}，保留 SPDX 头。
+原 tutorial host check 只允许 10.0/10.1；B300 为 10.3，故只放宽 host check，
+仍以 \code{sm\_103a} 编译。
+
+\begin{lstlisting}
+cd "$C1_DIR/challenge"
+export CUTLASS_ROOT="$C1_FLASH/cutlass"
+./build_sm103.sh 128 256 64
+
+nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+  -I"$CUTLASS_ROOT/include" \
+  -I"$CUTLASS_ROOT/tools/util/include" \
+  -I"$CUTLASS_ROOT/examples/common" \
+  -I. -o tcgen05_sm103 tcgen05_sm103_gemm.cu
+\end{lstlisting}
+
+该 GEMM 使用 F16xF16$\rightarrow$F32 的
+\code{SM100\_MMA\_F16BF16\_SS<...,128,256>}；四个 K=16 指令组成
+\(128\times256\times64\) 工作例。第一次误把运行时 K 设为 16，tutorial
+提示 problem shape 不被 K=64 tiler 整除；改为 \code{128 256 64} 后，CPU
+reference infinity-norm 差为 0，relative error 为 0，并打印
+\code{Execution is successful.}。
+
+\subsection{故意构造的 16x16 负例}
+
+在临时副本中把 atom 设为 \(M=N=16\)，同一 \code{nvcc -arch=sm\_103a}
+命令立即失败：
+
+\begin{lstlisting}
+SM100_MMA_F16BF16 M-mode size should be 64 or 128
+UMMA_1SM M-mode size should be 64 or 128
+\end{lstlisting}
+
+完整输出见 \code{results/tcgen05\_m16\_compile.log}。这是 trait 在实例化时
+拒绝 M=16，而非运行慢、参数差或运行时不稳定。
+
+\subsection{轻量 tcgen05 NCU}
+
+\begin{lstlisting}
+ncu --target-processes all --kernel-name-base function \
+  -k "regex:gemm_device" \
+  --metrics gpu__time_duration.avg,\
+sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed,\
+sm__warps_active.avg.pct_of_peak_sustained_elapsed,\
+dram__bytes_read.sum,dram__bytes_write.sum \
+  --csv ./tcgen05_sm103 128 256 64
+\end{lstlisting}
+
+CSV 显示 block=128、grid=\((1,1,1)\)，kernel 名含
+\code{SM100\_MMA\_F16BF16\_SS<...,128,256,...>}。profile duration 约
+25.1\,ms，旧通用 tensor metric 为 0；二者都不用于同 FlashKDA 做性能结论，
+因为这是单 CTA 小 tutorial，NCU instrumentation 又会显著放大时间。该实验
+的职责是证明 tcgen05 能在 SM103a 正确执行，并证明 16x16 不是可接受 tile。
+
+\begin{decision}{只换指令路线的首轮结论}
+局部 patch 不可行。SM100 v2 至少需要重做 K2 M/N tile、head/CTA 划分、
+shared swizzle/descriptor、TMEM lifetime、barrier 和 epilogue。负结果支持
+v1 保持 SM80 通用路径；但没有证明完整 SM100 v2 必然不值得做。
+\end{decision}
+
+\section{CHUNK 数值范围和 state 精度 probe}
+
+\subsection{CHUNK range probe}
+
+K1 采用 base-2 gate：
+\[
+g_{\log_2}=\texttt{lower\_bound}\log_2(e)\,
+\sigma(\exp(A_{\log})(g+\texttt{dt\_bias})),\qquad
+\texttt{lower\_bound}=-5.
+\]
+对一个 chunk 做 \(\exp_2(\mathrm{cumsum}(g_{\log_2}))\) 后写回 bf16。
+bf16 最小 normal/subnormal 约为 \(2^{-126}\)/\(2^{-133}\)，CHUNK 变大时
+累计负指数更容易下溢。
+
+新增 \code{challenge/chunk\_range\_probe.py}，用 1,048,576 个独立 scalar，
+seed 0、B300 CUDA、benchmark 同型分布（bf16 normal g，float32 uniform
+dt\_bias/A\_log）执行：
+
+\begin{lstlisting}
+"$C1_PY" challenge/chunk_range_probe.py \
+  --samples $((1<<20)) --seed 0 \
+  | tee "$C1_DIR/results/chunk_range_b300.log"
+\end{lstlisting}
+
+\begin{center}\small
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+CHUNK & log2 最小值 & exp2 最小值 & bf16 zero fraction \\
+\midrule
+16 & -103.066 & \(9.419\times10^{-32}\) & 0.000000 \\
+32 & -189.270 & 0 & 0.098475 \\
+64 & -347.805 & 0 & 0.547464 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+这是标量范围 probe，不是完整 kernel 正确性。它已经说明在当前 lower bound
+下，CHUNK=32 开始存在明显 bf16 zero，CHUNK=64 更严重。大 CHUNK 必须先设计
+rescale 或更高精度存储；不能只改 \code{constexpr CHUNK=16}。同时 inverse
+矩阵元素数从 \(16^2=256\) 增至 \(32^2=1024\)、\(64^2=4096\)，现有
+Neumann helper、workspace、layout 和 SM80 分块都会同步重写。
+
+\subsection{state precision probe}
+
+源码表明 fp32 global state 会转为 bf16 \code{state\_acc}，结束时再转回
+fp32。因此新增 \code{challenge/state\_precision\_probe.py}，固定
+\(B=1,T=1024,H=4,D=128\)、seed 0，比较：
+
+\begin{enumerate}
+  \item FlashKDA bf16 global state；
+  \item FlashKDA fp32 global state interface；
+  \item FLA chunk\_kda fp32 reference。
+\end{enumerate}
+
+\begin{lstlisting}
+"$C1_PY" challenge/state_precision_probe.py \
+  | tee "$C1_DIR/results/state_precision_b300.log"
+\end{lstlisting}
+
+\begin{center}\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+比较 & max abs & mean abs \\
+\midrule
+bf16-state vs fp32-state output & 0 & 0 \\
+bf16-state vs fp32-state final & 0 & 0 \\
+FlashKDA output vs FLA & \(4.882812\times10^{-4}\) & \(1.289556\times10^{-5}\) \\
+FlashKDA final state vs FLA & \(3.915220\times10^{-3}\) & \(9.135994\times10^{-5}\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+near-zero 元素使 max relative error 很大（约 \(7.07\times10^1\) 和
+\(9.99\times10^1\)），故本文采用 absolute max/mean 描述整体差异。
+
+\begin{decision}{state 的首轮结论}
+bf16/fp32 interface 的逐元素相同并不表示 fp32 internal state 没价值；
+它只表示当前两条接口在 bf16 \code{state\_acc} 汇合。若第二轮要研究
+内部 fp32 state，必须实现真正的 fp32 shared recurrence 或独立模拟它。
+\end{decision}
+
+\section{失败尝试和修复记录}
+
+\begin{longtable}{@{}L{0.23\linewidth}L{0.31\linewidth}L{0.35\linewidth}@{}}
+\toprule
+尝试/现象 & 观察 & 修复或保留结论 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+登录节点探 GPU/import torch & B300 login 无 nvidia-smi PATH，系统 Python 无 torch & GPU/Python CUDA 均进入 srun，显式使用 assignment venv \\
+首次官方测试 & 缺 Ninja，FLA helper/JIT 无法开始 & 安装 \code{ninja==1.13.2} \\
+测试继续执行 & 缺 Matplotlib，绘图步骤失败 & 安装 \code{matplotlib==3.11.1} \\
+B300 CUTLASS 短 hash & remote 不接受短 hash ref & checkout 完整 hash \\
+5090 直接 clone & 登录节点 clone 无进展 & 保留不完整目录；从 B300 传输已验证源码 \\
+官方 ncu.sh & 假定 bare pip，uv 环境没有 & 直接以 venv Python 执行 NCU \\
+tcgen tutorial K=16 & K=64 tiler 不整除，拒绝 OOB & 改为 128,256,64；非 tcgen 指令失败 \\
+tcgen M=16 & 编译期 static assertion & 用作 tile 不可直接替换的证据 \\
+5090 torch.equal & 微小非零误差导致 strict fail & 不伪称通过；第二轮做 allclose/final-state \\
+\end{longtable}
+
+\section{版本控制、产物和最短复现}
+
+第一轮已推送的提交是：
+
+\begin{lstlisting}
+3e0e391 assignment02: add C1 baseline and SM100 challenge evidence
+\end{lstlisting}
+
+提交含报告草稿、challenge 源码、构建脚本和轻量日志；未包含
+\code{ncu\_fixed\_h96\_b300.ncu-rep}（约 90\,MiB）、完整 SASS dump 以及
+任何与 C1 无关文件。
+
+在 B300 上的最短复现入口：
+
+\begin{lstlisting}
+ssh infrab300
+export C1_REPO=/home/lcpu/<user>/<repo>
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 \
+  --chdir="$C1_FLASH" "$C1_PY" -u tests/test_fwd.py
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 \
+  --chdir="$C1_FLASH" "$C1_PY" -u benchmarks/bench_fwd.py \
+  --mode all --H 96 --D 128 --warmup 30 --iters 200 --repeats 5
+srun --partition=gpu --gres=gpu:1 --time=00:20:00 \
+  --chdir="$C1_DIR/challenge" bash -lc '
+    export CUTLASS_ROOT="$C1_FLASH/cutlass"
+    ./build_sm103.sh 128 256 64
+    "$C1_PY" chunk_range_probe.py --samples $((1<<20)) --seed 0
+    "$C1_PY" state_precision_probe.py
+  '
+\end{lstlisting}
+
+\section{第一轮结论的强度与第二轮待办}
+
+\subsection{已有充分证据的结论}
+
+\begin{enumerate}
+  \item B300 可构建并通过官方 PyTorch fixed/varlen exact 对拍。
+  \item B300/5090 生产 extension 的实际 MMA 仍是 HMMA/SM80，而非 WGMMA/TCGEN05。
+  \item H=96 官方形状对 FLA chunk\_kda 有 2.07x--3.35x 加速，但优势依赖 shape。
+  \item tcgen05 的最小 M tile 与 TMEM accumulator 模型和 K2 的 16x16 SM80
+        设计直接冲突。
+  \item 当前 lower bound 下 CHUNK=32 已存在 bf16 exponent 下溢，64 更严重。
+  \item 当前 fp32 state 只改变 global I/O，不改变 bf16 internal recurrence。
+\end{enumerate}
+
+\subsection{还不能下结论的事项}
+
+\begin{enumerate}
+  \item tutorial microbench 不能证明完整 SM100 v2 必然更慢；
+  \item 5090 strict mismatch 尚不能确定为舍入顺序；
+  \item 标量 range probe 不能替代完整 CHUNK=32/64 kernel 的精度和性能测量；
+  \item K2 低 occupancy 不能被简化成唯一的 bandwidth-bound 或 compute-bound；
+  \item 接口 fp32 的无差异不能外推为 internal fp32 没有价值。
+\end{enumerate}
+
+\subsection{第二轮建议顺序}
+
+\begin{longtable}{@{}L{0.12\linewidth}L{0.34\linewidth}L{0.39\linewidth}@{}}
+\toprule
+优先级 & 工作 & 可验收交付 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & 5090 allclose/final-state 诊断 & 固定 seed、重复运行、输出和 state 误差分布 \\
+2 & K2 并行度纸面上界 & 多 head/CTA、persistent、2-CTA 的 smem/reg/grid/依赖反例 \\
+3 & 选择一个并行度 prototype & reference 对拍、occupancy、端到端时间、负结果机制 \\
+4 & 大 CHUNK reference/rescale & inverse error、下溢、rescale、资源和速度逐项记录 \\
+5 & v2 SM100 专版决策 & 将可移植性、工程成本、峰值潜力组织成最终结论 \\
+\end{longtable}
+
+\begin{record}{给第二轮的实验纪律}
+每一个新数字前都记录 GPU、commit、输入 shape、seed、state dtype、
+warmup/iters/repeats 和是否处于 profiler。C1 的价值不在于写出一条
+「用了 tcgen05」的结论，而在于把 tile、数值范围、状态依赖和实测指标连接为
+可复查、可反驳的因果链。
+\end{record}
+
+\end{document}
