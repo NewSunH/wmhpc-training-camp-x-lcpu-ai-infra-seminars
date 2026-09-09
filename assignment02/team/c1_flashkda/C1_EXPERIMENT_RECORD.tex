@@ -1151,4 +1151,123 @@ CUDA kernel 改变 TMA layout、warp/CTA 映射后的位级一致性，也不预
 再测量资源占用与端到端时间；基线路径保持不变。
 \end{record}
 
+\subsection{R3.2：native 2-CTA K2 prototype 与 exactness}
+
+\subsubsection{改动边界}
+
+reference oracle 通过后，R3.2 只在编译期开关
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2=1} 下启用新路径；默认构建仍选择原来的
+\(N\times H\) K2 launch。开关由 \code{setup.py} 传为
+\code{-DC1\_VSPLIT\_K2=1}。此处不试图把 state 重新打包为 \(64\times128\)
+的 TMA tile，也不更改 Kernel 1/workspace 的数据格式。
+
+启用时，K2 的 grid 从 \((N,H)\) 改为 \((N,2H)\)，一个 CTA 的线程数从
+\(4\times32+2\times32=192\) 改为 \(2\times32+2\times32=128\)。同一个 kernel
+以 \code{blockIdx.y / 2} 取得 head，以 \code{blockIdx.y \& 1} 选择
+\([0,64)\) 或 \([64,128)\) value slice。两个 MMA warp 仍做完整 K dimension
+的 reduction，但只访问自己两个 \(16\)-column block 对应的 state row、\(v\) 和
+output column；Phase 6 也只更新相同的 state rows。
+
+为避免两个 CTA 对同一 output/state TMA tile 的重叠写，prototype 保留完整的
+state 和只读输入 TMA load，却将 output 和 final state 的写回改为仅属于本 CTA
+的 64 列/行标量 store。此选择刻意牺牲 store 效率，换取最小改动下的无竞争语义；
+因此即使正确性通过，也不能把该版本当作最终性能实现。完整 state 和三 stage
+input buffer 仍占用原有 shared memory，R3.3 要实测是否能在一个 SM 上驻留两个
+CTA，而不是从源码直接宣称 occupancy 增加。
+
+\subsubsection{B300 源码同步和构建}
+
+以下环境变量锁定架构、版本后缀和可见的 venv 工具；\code{uv pip} 是该 venv
+唯一可用的安装入口。\code{setup.py} 的 \code{FLASH\_KDA\_CUDA\_ARCHS=auto}
+会查询可见设备，因此构建也在 GPU allocation 内执行。
+
+\begin{lstlisting}
+export C1_REPO=/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+
+cd "$C1_FLASH"
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 --chdir="$PWD" \
+  env PATH="$C1_A2/.venv/bin:$PATH" \
+      FLASH_KDA_C1_VSPLIT_K2=1 FLASH_KDA_VERSION_SUFFIX=+c1vsplit \
+      NVCC_THREADS=8 \
+  uv pip install --python "$C1_PY" --no-build-isolation --no-deps \
+      --reinstall --editable .
+\end{lstlisting}
+
+\paragraph{同步记录。}首次 \code{scp} 的目标误写为 \code{FlashKDA/../}，使四个
+源文件落在 C1 根目录而非其 build 路径。它们没有被编译；随后按 SHA-256 核对，
+删除这四个刚创建的副本，并将 \code{fwd\_kernel2.cuh}、
+\code{fwd\_launch.cu}、\code{setup.py} 和
+\code{challenge/vsplit\_native\_smoke.py} 放到各自的源码目录。之后再次比对
+四个 SHA-256，均与本地提交一致。
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{c l l}
+\toprule
+job & 操作 & 结果 \\
+\midrule
+23491 & 调用 \code{\$C1\_PY} 的同目录 \code{pip} & exit 127；venv 未安装该 executable \\
+23492 & \code{uv pip} 构建 & \code{Mismatched Ranks}；FP32 手工 store 错误使用 3D TMA layout \\
+23493 & 改用二维 \code{FP32StateSmemLayout} 后重建 & 成功，安装 \code{flash-kda==0.0.1+c1vsplit} \\
+\bottomrule
+\end{tabular}
+\caption{R3.2 B300 构建尝试。三个原始 transcript 为
+\code{results/vsplit\_native\_build\_b300*.log}；其中绝对远程路径替换为
+\code{<B300\_REPO>}。}
+\end{table}
+
+23492 的错误来自 FP32 final-state 手工写回：\code{TMAFP32StateSmemLayout} 带有
+TMA 的前置 singleton 维度，不能以 \code{(value\_row,key\_col)} 两个坐标索引。
+修订为同一 shared-memory buffer 的二维 \code{FP32StateSmemLayout} 后，23493
+的 CUDA 编译、链接和 editable install 均完成。这项修复没有改变 BF16 路径或
+baseline 的 TMA store。
+
+\subsubsection{native exactness smoke}
+
+构建成功后，在 job 23495 使用新安装 extension 和官方 \code{torch\_ref} 对拍。
+\code{challenge/vsplit\_native\_smoke.py} 固定 seed=42；每个 case 分别比较
+output，且在存在 final state 时比较 entire state tensor。
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+srun --partition=gpu --gres=gpu:1 --time=00:20:00 --chdir="$PWD" \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -u \
+    ../challenge/vsplit_native_smoke.py --seed 42 \
+    --json ../results/vsplit_native_smoke_b300.json \
+  2>&1 | tee ../results/vsplit_native_smoke_b300.log
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l c c c c}
+\toprule
+case & output diff & output exact & state diff & state exact \\
+\midrule
+\code{t16\_h96\_bf16\_inout} & 0 & 是 & 0 & 是 \\
+\code{t17\_h1\_fp32\_inout} & 0 & 是 & 0 & 是 \\
+\code{t64\_h1\_bf16\_no\_state} & 0 & 是 & -- & 是 \\
+\code{t17\_h1\_bf16\_in\_only} & 0 & 是 & -- & 是 \\
+\code{t17\_h1\_fp32\_out\_only} & 0 & 是 & 0 & 是 \\
+\bottomrule
+\end{tabular}
+\caption{R3.2 job 23495 native exactness。JSON 和完整 stdout 位于
+\code{results/vsplit\_native\_smoke\_b300.\{json,log\}}。}
+\end{table}
+
+\begin{record}{R3.2 结论与 R3.3 门槛}
+native prototype 已覆盖官方 \(H=96,T=16\) 的 BF16 state-in/state-out，
+首次跨 chunk 的 FP32 state-in/state-out，四 chunk 无状态，以及 state-in-only
+和 state-out-only 的分支；所有可比较的张量均为 exact。故列切分不再只是
+reference 层候选，而是可执行的 CUDA 原型。它尚未覆盖 varlen、batched 或全部
+长度组合，也尚未测量资源和时间。R3.3 必须先用 NCU 核实 kernel grid、threads、
+shared memory、registers 和 achieved occupancy，再以官方 \(H=96\) benchmark
+比较端到端时间；手工 split store 使负性能结果完全可能。
+\end{record}
+
 \end{document}

@@ -23,3 +23,9 @@ git；报告中的结论同时记录了关键计数和指标。
   oracle。三个长度的 output 与 final state 均逐元素完全一致；对应 Slurm job 为
   23473、23478、23479。T=64 日志还保留了一次 Slurm client 通信告警，数值 JSON
   仍由脚本完整写出，不能把该次运行用于调度性能判断。
+- vsplit_native_build_b300*.log：第三轮 native prototype 的三次构建尝试：job
+  23491 的 bin/pip 不存在，job 23492 暴露 FP32 TMA layout 的 rank 错误，修复后
+  job 23493 成功构建 flash-kda==0.0.1+c1vsplit。绝对远程路径已替换为
+  <B300_REPO>。
+- vsplit_native_smoke_b300.{log,json}：第三轮 job 23495 的 native exactness
+  矩阵；五个 fixed-length/state 配置的 output 及（适用时）final state 均 exact。
