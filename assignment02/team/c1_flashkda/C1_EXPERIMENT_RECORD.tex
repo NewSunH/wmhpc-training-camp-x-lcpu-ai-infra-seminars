@@ -949,4 +949,111 @@ stdout/结构化摘要；\code{results/diagnose\_b300\_boundary\_path.log} 与
 保留 job 23441 的 PATH 失败。这些均为小文件，将随本轮 commit 进入 git。
 \end{record}
 
+\subsection{R2.2：K2 并行度的资源上界与候选方案筛选}
+
+\subsubsection{问题重述：依赖在哪一维，空闲又在哪一维？}
+
+K2 对一个 \((\text{sequence},\text{head})\) 的所有 chunk 按时间顺序递推：
+第 \(t+1\) 个 chunk 必须读取第 \(t\) 个 chunk 更新后的 \(128\times128\)
+state。因此不能把同一 head 的时间维 chunk 直接拆给多个 CTA 后独立运行。
+但不同 head 互不读写同一 state，且 state 的 value-column（矩阵第二维）在
+K2 的这条公式中也没有跨列归约：
+
+\[
+  S'_{:,j}=S_{:,j}\odot g + K_{\mathrm{restored}}^\mathsf{T}U_{:,j},
+  \qquad
+  O_{:,j}=Q_{\mathrm{decayed}}S_{:,j}+M_{qk}U_{:,j}.
+\]
+
+这里 \(j\) 是 value column。上述表达与源码的 Phase 1--6 一致：四个 MMA
+warp 各处理两个连续 \(16\times16\) 列块；Phase 6 的
+\code{for (bi=0; bi<2; ++bi)} 对各列块独立更新 \code{s\_acc}。末尾的
+\code{compute\_barrier} 只是 CTA 内同步，不是跨列求和。这给 ``按 value 列
+切成两个 CTA'' 提供了正确性的代数前提；它不等价于已经证明这种切分会更快。
+
+\subsubsection{B300 资源测量与现有 K2 上界}
+
+第一轮 NCU 对官方 \((T,H,D)=(8192,96,128)\) K2 记录的 launch 是
+block=192 threads、grid=\((N,H)=(1,96)\)、dynamic shared memory=98,432 B，
+registers/thread 为 73--74，theoretical occupancy=18.75\%，achieved
+occupancy=9.37\%。为避免把 ``低 occupancy'' 误解为某个猜测，本轮又在 B300
+job 23452 内读取设备属性；输出保存在
+\code{results/k2\_resource\_limits\_b300.log}：148 SM、每 SM 2048 threads、
+233,472 B shared memory、65,536 registers。第一次 job 23451 还尝试读取
+PyTorch 不提供的 \code{regs\_per\_block} 属性，已打印前述有效字段后以
+\code{AttributeError} 结束；不将其静默删除。
+
+实际执行的成功命令等价于：
+
+\begin{lstlisting}
+ssh infrab300
+export C1_A2=/home/lcpu/<user>/<repo>/assignment02
+export C1_PY=$C1_A2/.venv/bin/python
+srun --partition=gpu --gres=gpu:1 --time=00:05:00 \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -c '
+import torch
+p = torch.cuda.get_device_properties(0)
+for name in ("multi_processor_count", "max_threads_per_multi_processor",
+             "shared_memory_per_multiprocessor", "regs_per_multiprocessor"):
+    print(f"{name}={getattr(p, name, None)}")
+'
+\end{lstlisting}
+
+由上述数值可得到 K2 在一个 SM 上的 resident-CTA 上界：
+\[
+\begin{aligned}
+B_{\mathrm{smem}} &= \left\lfloor\frac{233472}{98432}\right\rfloor=2,\\
+B_{\mathrm{thread}} &= \left\lfloor\frac{2048}{192}\right\rfloor=10,\\
+B_{\mathrm{reg}} &\mathrel{\gtrsim}\left\lfloor\frac{65536}{192\times74}\right\rfloor=4,\\
+B_{\mathrm{resident}} &\leq \min(2,10,4)=2.
+\end{aligned}
+\]
+
+shared memory 是决定性项；两 CTA 需要 196,864 B，三 CTA 则 295,296 B，
+超过 233,472 B。两 CTA 的 384 threads 对应
+\(384/2048=18.75\%\)，与 NCU 的 theoretical occupancy 相符。相反，官方
+unbatched grid 只有 96 CTA，小于 148 SM；调度器若优先摊到空闲 SM，就会让
+active SM 上只有一个 192-thread CTA（\(192/2048=9.375\%\)），这与 NCU 的
+9.37\% achieved 值一致。该对应关系是对调度现象的解释，不是由一条 metric
+单独证明的因果结论。
+
+\subsubsection{三个候选方案与反例}
+
+\begin{longtable}{@{}L{0.19\linewidth}L{0.22\linewidth}L{0.25\linewidth}L{0.24\linewidth}@{}}
+\toprule
+方案 & 能改变的并行度 & 资源/正确性反例 & R2.2 判断 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+多 head/CTA & 把两个 head 顺序装进一个 CTA，grid 从 96 降到 48 & 每个 head 都有独立 state、TMA pipeline 和 512 个 chunk；顺序复用不能缩短临界路径，且更少 CTA 反而恶化 H=96 的 grid 不足 & 拒绝作为首个 prototype \\
+persistent CTA & 用约 SM 数的 CTA 循环领取 head & H=96 小于 148 SM；148 个 persistent CTA 中至少 52 个一开始无 head 可领。H 很大时可能省 launch/调度开销，但不打破单 head 的时间依赖 & 留作 H\(\gg\)SM 的后续变体，不用于官方形状首测 \\
+2 CTA/head，按 value column 切 64+64 & grid 从 96 提高到 192；每 CTA 负责半个 state、半个 v/out 列 & 列独立保证可表达；但两个 CTA 不能共享 smem，仍须各自 TMA 读取全宽的 \code{k\_decayed}、\code{q\_decayed}、\code{k\_restored}、\code{g\_total}、\code{INV} 和 \code{Mqk}，会重复全局流量和 TMA/同步开销 & 唯一值得实现的候选；预期不是必然加速 \\
+\end{longtable}
+
+\subsubsection{2-CTA 列切分的资源草算与 prototype 边界}
+
+当前 K2 的可见 shared-memory 主体可按源码粗分为 state 32 KiB，三 stage input
+约 \(3\times17{,}984\) B，两个 stage output 8 KiB，另有 pipeline/barrier
+元数据；合计与 NCU 的 98,432 B 相符。若只把 value dimension 从 128 切为 64，
+state 约降至 16 KiB，\code{v/out} 约各减半；但 q/k side 的三个
+\(16\times128\) workspace tensor 不能减半。故每个列切 CTA 的乐观估计仍约
+68--72 KiB，不是 49 KiB，更不是简单的 ``原来的一半''。两个 CTA/head 的
+总 smem 也会高于现有一个 CTA/head；潜在收益来自增加 grid，而不是减少数据量。
+
+实现该 prototype 必须同时改：\code{VOLayout} 与 output TMA 的列 offset、
+\code{StateSmemLayout} 与 state load/store 的列 slice、四个 MMA warp 到两个
+MMA warp 的映射、尾 tile 的手工 store、以及 \((N,H,2)\) 的 grid 映射。只在
+launch 处把 grid.z 设为 2 会使两个 CTA 写同一 output/state，属于错误实验。
+因此 R2.2 的结果是预先限定 R2.3 的改动边界和验收标准：B300 exact 对拍，
+NCU 记录新 smem/regs/occupancy，event benchmark 与原 K2 的端到端时间比较，
+并把重复 Q/K TMA 流量作为可能负结果的机制。
+
+\begin{record}{R2.2 的结论强度}
+已经量化了官方 H=96 K2 的 grid/SM 不匹配和 smem 的两-CTA 上界，也从源码验证
+了列独立这一必要条件。尚未实现 2-CTA kernel，因而不能声称 occupancy 提升、
+也不能声称会有端到端收益。下一次代码改动必须是隔离的 compile-time prototype，
+不能污染已验证的基线路径。
+\end{record}
+
 \end{document}

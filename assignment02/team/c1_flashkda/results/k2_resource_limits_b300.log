@@ -1,0 +1,13 @@
+srun: job 23452 queued and waiting for resources
+srun: job 23452 has been allocated resources
+name=NVIDIA B300 SXM6 AC
+major=10
+minor=3
+multi_processor_count=148
+max_threads_per_multi_processor=2048
+max_threads_per_block=1024
+shared_memory_per_multiprocessor=233472
+shared_memory_per_block=49152
+regs_per_multiprocessor=65536
+max_blocks_per_multi_processor=None
+total_memory=287428640768

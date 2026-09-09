@@ -17,3 +17,5 @@ git；报告中的结论同时记录了关键计数和指标。
   `bin/` 到 `PATH` 后，在 B300 上运行同一诊断的成功记录。
 - `diagnose_b300_boundary_no_venv_path.log`：第二轮 job 23441；保留未把 venv
   `bin/` 加入 `PATH` 时 PyTorch JIT 找不到 Ninja 的失败，以记录环境修复过程。
+- `k2_resource_limits_b300.log`：第二轮 job 23452；B300 的 SM 数、每 SM
+  thread/shared-memory/register 上限，用于 K2 CTA 并行度的资源上界分析。
