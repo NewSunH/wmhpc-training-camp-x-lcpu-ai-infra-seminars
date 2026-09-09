@@ -16,6 +16,11 @@ def get_nvcc_thread_args():
     return ["--threads", nvcc_threads]
 
 
+def get_c1_vsplit_args():
+    """Keep the C1 two-CTA recurrence prototype opt-in at build time."""
+    return ["-DC1_VSPLIT_K2=1"] if is_flag_set("FLASH_KDA_C1_VSPLIT_K2") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -80,6 +85,7 @@ ext_modules = [
                 '-lineinfo',
                 *get_nvcc_thread_args(),
                 *get_arch_flags(),
+                *get_c1_vsplit_args(),
             ],
         },
     )

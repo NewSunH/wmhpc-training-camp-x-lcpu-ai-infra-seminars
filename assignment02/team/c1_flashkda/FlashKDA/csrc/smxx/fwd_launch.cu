@@ -183,6 +183,40 @@ void launch_fwd(
     // ===== Launch Kernel 2 (recurrence) =====
 #if BLOCK_LEVEL_K2 >= 0
     {
+#if C1_VSPLIT_K2
+        // C1 R3 prototype: two 64-value-column CTAs per head.  The kernel
+        // itself uses blockIdx.y to select the half; both CTAs run in one
+        // 2*H grid so they can co-reside.  Baseline K2 remains the default.
+        constexpr int kK2Threads = 32 * 2 + 64;
+        using SharedStorageK2T = SharedStorageK2<K2L, kInputStages, kOutputStages>;
+        int smem_size_k2 = sizeof(SharedStorageK2T);
+
+        auto kernel2 = _flash_kda_fwd_recurrence<
+            decltype(tma_load_v), decltype(tma_load_beta2),
+            decltype(tma_load_ws_kd), decltype(tma_load_ws_qd), decltype(tma_load_ws_kr),
+            decltype(tma_load_ws_gt), decltype(tma_load_ws_inv), decltype(tma_load_ws_mqk),
+            decltype(tma_load_initial_state),
+            decltype(tma_store_final_state),
+            decltype(tma_store_out),
+            CHUNK, D, kInputStages, kOutputStages, kK2Threads,
+            HasStateIn, HasStateOut, StateFP32, IsVarlen, true
+        >;
+
+        cudaFuncSetAttribute(kernel2, cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size_k2);
+
+        dim3 grid_k2(N, H * 2);
+        dim3 block_k2(kK2Threads);
+
+        kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
+            tma_load_v, tma_load_beta2,
+            tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
+            tma_load_ws_gt, tma_load_ws_inv, tma_load_ws_mqk,
+            tma_load_initial_state,
+            tma_store_final_state,
+            tma_store_out,
+            out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
+        );
+#else
         constexpr int kK2Threads = 32 * 2 + 128;
         using SharedStorageK2T = SharedStorageK2<K2L, kInputStages, kOutputStages>;
         int smem_size_k2 = sizeof(SharedStorageK2T);
@@ -210,8 +244,9 @@ void launch_fwd(
             tma_load_initial_state,
             tma_store_final_state,
             tma_store_out,
-            out_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
+            out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
         );
+#endif
     }
 #endif
 }
