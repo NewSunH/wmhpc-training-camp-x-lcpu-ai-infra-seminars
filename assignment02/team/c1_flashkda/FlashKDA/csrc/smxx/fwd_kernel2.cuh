@@ -862,7 +862,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                 auto* final_state = static_cast<float*>(final_state_raw_ptr);
                 Tensor s_fp32 = make_tensor(
                     make_smem_ptr(reinterpret_cast<float*>(shared_storage.state_fp32_buf)),
-                    TMAFP32StateSmemLayout{});
+                    FP32StateSmemLayout{});
                 int64_t state_base = int64_t(seq_idx * H + head_idx) * D * D;
                 for (int value_row = value_begin; value_row < value_begin + kSliceWidth; ++value_row) {
                     for (int key_col = 0; key_col < D; ++key_col) {
