@@ -44,7 +44,10 @@ void launch_fwd(
 
     // TMA layouts for Kernel 2
     using TMAStateSmemLayout = typename K2L::TMAStateSmemLayout;
+    using TMAValueSliceStateSmemLayout = typename K2L::TMAValueSliceStateSmemLayout;
     using TMAFP32StateSmemLayout = typename K2L::TMAFP32StateSmemLayout;
+    using TMAFP32ValueSliceStateSmemLayout = typename K2L::TMAFP32ValueSliceStateSmemLayout;
+    using TMAValueSliceVOLayout = typename K2L::TMAValueSliceVOLayout;
 
     // --- gmem layouts for original tensors
     auto gmem_layout = make_layout(make_shape(H, T_total, D), make_stride(D, D * H, 1));
@@ -104,6 +107,7 @@ void launch_fwd(
 
     // --- TMA descriptors for Kernel 2 (loads: v,beta,workspace; load/store: state,out)
     auto tma_load_v     = make_tma_copy(SM90_TMA_LOAD{}, m_v, TMAVOLayout{});
+    auto tma_load_v_slice = make_tma_copy(SM90_TMA_LOAD{}, m_v, TMAValueSliceVOLayout{});
     auto tma_load_beta2 = make_tma_copy(SM90_TMA_LOAD{}, m_beta, TMABetaSmemLayout{});
 
     auto tma_load_ws_kd  = make_tma_copy(SM90_TMA_LOAD{}, m_ws_kd, TMAVOLayout{});
@@ -114,6 +118,7 @@ void launch_fwd(
     auto tma_load_ws_mqk = make_tma_copy(SM90_TMA_LOAD{}, m_ws_mqk, TMALMLayout{});
 
     auto tma_store_out = make_tma_copy(SM90_TMA_STORE{}, m_out, TMAVOLayout{});
+    auto tma_store_out_slice = make_tma_copy(SM90_TMA_STORE{}, m_out, TMAValueSliceVOLayout{});
 
     // --- State TMA descriptors (conditional on HasStateIn/HasStateOut and StateFP32)
     auto make_state_tma = [&]() {
@@ -125,7 +130,9 @@ void launch_fwd(
                 make_gmem_ptr(static_cast<float*>(final_state_ptr)), state_gmem_layout);
             auto tma_load = make_tma_copy(SM90_TMA_LOAD{}, m_initial_fp32, TMAFP32StateSmemLayout{});
             auto tma_store = make_tma_copy(SM90_TMA_STORE{}, m_final_fp32, TMAFP32StateSmemLayout{});
-            return cute::make_tuple(tma_load, tma_store);
+            auto tma_load_slice = make_tma_copy(SM90_TMA_LOAD{}, m_initial_fp32, TMAFP32ValueSliceStateSmemLayout{});
+            auto tma_store_slice = make_tma_copy(SM90_TMA_STORE{}, m_final_fp32, TMAFP32ValueSliceStateSmemLayout{});
+            return cute::make_tuple(tma_load, tma_load_slice, tma_store, tma_store_slice);
         } else {
             // BF16 state TMA descriptors (or dummy for no-state)
             auto state_ptr_load = HasStateIn
@@ -138,10 +145,13 @@ void launch_fwd(
             auto m_final = make_tensor(make_gmem_ptr(state_ptr_store), state_gmem_layout);
             auto tma_load = make_tma_copy(SM90_TMA_LOAD{}, m_init, TMAStateSmemLayout{});
             auto tma_store = make_tma_copy(SM90_TMA_STORE{}, m_final, TMAStateSmemLayout{});
-            return cute::make_tuple(tma_load, tma_store);
+            auto tma_load_slice = make_tma_copy(SM90_TMA_LOAD{}, m_init, TMAValueSliceStateSmemLayout{});
+            auto tma_store_slice = make_tma_copy(SM90_TMA_STORE{}, m_final, TMAValueSliceStateSmemLayout{});
+            return cute::make_tuple(tma_load, tma_load_slice, tma_store, tma_store_slice);
         }
     };
-    auto [tma_load_initial_state, tma_store_final_state] = make_state_tma();
+    auto [tma_load_initial_state, tma_load_initial_state_slice,
+          tma_store_final_state, tma_store_final_state_slice] = make_state_tma();
 
     // ===== Launch Kernel 1 (prepare) =====
 #if BLOCK_LEVEL_K1 >= 0
@@ -184,20 +194,22 @@ void launch_fwd(
 #if BLOCK_LEVEL_K2 >= 0
     {
 #if C1_VSPLIT_K2
-        // C1 R3 prototype: two 64-value-column CTAs per head.  The kernel
-        // itself uses blockIdx.y to select the half; both CTAs run in one
-        // 2*H grid so they can co-reside.  Baseline K2 remains the default.
+        // C1 R4 prototype: two 64-value-column CTAs per head.  Each CTA owns
+        // compact 16x64 V/output and 64x128 state tiles, which are also used
+        // by the corresponding TMA descriptors.
         constexpr int kK2Threads = 32 * 2 + 64;
-        using SharedStorageK2T = SharedStorageK2<K2L, kInputStages, kOutputStages>;
+        using SharedStorageK2T = SharedStorageK2<K2L, kInputStages, kOutputStages, true>;
         int smem_size_k2 = sizeof(SharedStorageK2T);
 
         auto kernel2 = _flash_kda_fwd_recurrence<
-            decltype(tma_load_v), decltype(tma_load_beta2),
+            decltype(tma_load_v), decltype(tma_load_v_slice), decltype(tma_load_beta2),
             decltype(tma_load_ws_kd), decltype(tma_load_ws_qd), decltype(tma_load_ws_kr),
             decltype(tma_load_ws_gt), decltype(tma_load_ws_inv), decltype(tma_load_ws_mqk),
             decltype(tma_load_initial_state),
+            decltype(tma_load_initial_state_slice),
             decltype(tma_store_final_state),
-            decltype(tma_store_out),
+            decltype(tma_store_final_state_slice),
+            decltype(tma_store_out), decltype(tma_store_out_slice),
             CHUNK, D, kInputStages, kOutputStages, kK2Threads,
             HasStateIn, HasStateOut, StateFP32, IsVarlen, true
         >;
@@ -208,12 +220,14 @@ void launch_fwd(
         dim3 block_k2(kK2Threads);
 
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
-            tma_load_v, tma_load_beta2,
+            tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
             tma_load_ws_gt, tma_load_ws_inv, tma_load_ws_mqk,
             tma_load_initial_state,
+            tma_load_initial_state_slice,
             tma_store_final_state,
-            tma_store_out,
+            tma_store_final_state_slice,
+            tma_store_out, tma_store_out_slice,
             out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #else
@@ -222,12 +236,14 @@ void launch_fwd(
         int smem_size_k2 = sizeof(SharedStorageK2T);
 
         auto kernel2 = _flash_kda_fwd_recurrence<
-            decltype(tma_load_v), decltype(tma_load_beta2),
+            decltype(tma_load_v), decltype(tma_load_v_slice), decltype(tma_load_beta2),
             decltype(tma_load_ws_kd), decltype(tma_load_ws_qd), decltype(tma_load_ws_kr),
             decltype(tma_load_ws_gt), decltype(tma_load_ws_inv), decltype(tma_load_ws_mqk),
             decltype(tma_load_initial_state),
+            decltype(tma_load_initial_state_slice),
             decltype(tma_store_final_state),
-            decltype(tma_store_out),
+            decltype(tma_store_final_state_slice),
+            decltype(tma_store_out), decltype(tma_store_out_slice),
             CHUNK, D, kInputStages, kOutputStages, kK2Threads,
             HasStateIn, HasStateOut, StateFP32, IsVarlen
         >;
@@ -238,12 +254,14 @@ void launch_fwd(
         dim3 block_k2(kK2Threads);
 
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
-            tma_load_v, tma_load_beta2,
+            tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
             tma_load_ws_gt, tma_load_ws_inv, tma_load_ws_mqk,
             tma_load_initial_state,
+            tma_load_initial_state_slice,
             tma_store_final_state,
-            tma_store_out,
+            tma_store_final_state_slice,
+            tma_store_out, tma_store_out_slice,
             out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #endif
