@@ -1,5 +1,5 @@
-% C1 FlashKDA 第一轮实验记录
-% 编译：latexmk -xelatex -interaction=nonstopmode C1_FIRST_ROUND_RECORD.tex
+% C1 FlashKDA 全轮次实验记录
+% 编译：latexmk -xelatex -interaction=nonstopmode C1_EXPERIMENT_RECORD.tex
 % 这是过程记录，不是答辩稿。集群目录中的 <user>/<repo> 是脱敏占位符。
 \documentclass[11pt,a4paper,fontset=none]{ctexart}
 \setCJKmainfont[BoldFont={Noto Serif CJK SC Bold}]{Noto Serif CJK SC}
@@ -53,16 +53,18 @@
 
 \begin{document}
 \begin{center}
-  {\LARGE\bfseries C1：FlashKDA 第一轮实验全记录}\\[6pt]
+  {\LARGE\bfseries C1：FlashKDA 全轮次实验记录}\\[6pt]
   {\sffamily 作业 2 Team / 可审计实验日志（不是答辩版本）}
 \end{center}
 \vspace{0.5em}\hrule\vspace{1em}
 
 \begin{record}{文档范围与使用说明}
-本文事无巨细地记录 C1 第一轮：题目与源码阅读、两套 Slurm 集群的接入和
-环境构建、FlashKDA extension 的编译、官方正确性和 benchmark、NCU/SASS
-检查、SM100 tcgen05 正反例、CHUNK 数值范围 probe、state 精度 probe。
-文中的命令均来自实际执行过程；为避免把个人用户名、IP 和绝对目录写进
+本文是 C1 从第一轮起持续追加的实验底稿，而不是一次性的答辩稿。第一轮记录
+了题目与源码阅读、两套 Slurm 集群的接入和环境构建、FlashKDA extension 的
+编译、官方正确性和 benchmark、NCU/SASS 检查、SM100 tcgen05 正反例、CHUNK
+数值范围 probe 与 state 精度 probe。第二轮及以后每轮均沿用相同的「动机
+--假设--命令--原始观察--解释--局限」结构追加，不能用后来的结论改写早期
+观察。文中的命令均来自实际执行过程；为避免把个人用户名、IP 和绝对目录写进
 git，使用 \code{/home/lcpu/<user>/<repo>} 和环境变量占位符。
 
 轻量日志已经版本控制在 \code{results/}。完整 NCU report 约 90\,MiB，
@@ -70,10 +72,30 @@ git，使用 \code{/home/lcpu/<user>/<repo>} 和环境变量占位符。
 关键命令、计数和指标均在本文中展开记录。
 \end{record}
 
+\begin{record}{轮次与修订约定}
+本文件的文件名固定为 \code{C1\_EXPERIMENT\_RECORD.tex}；每一次有意义的
+实验进展在末尾新开「轮次」章节，并在该章内写明运行日期、代码 commit、设备、
+环境、命令、输入和局限。若旧数据在后续被复核，应在新章节中说明复核，而不
+静默修改旧章节。PDF 是本地编译产物，不随 git 提交；可审计的源文件、轻量日志
+和脚本才进入版本控制。
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+轮次 & 覆盖范围 & 当前状态 \\
+\midrule
+第一轮 & 环境、基线、指令/数值探针和 tcgen05 可行性 & 已完成并冻结为里程碑 \\
+第二轮 & 5090 误差诊断、K2 并行度设计与 prototype & 进行中 \\
+后续轮次 & 大 CHUNK/rescale 与 SM100 v2 决策收束 & 待开始 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{record}
+
 \tableofcontents
 \clearpage
 
-\section{题目、范围和第一轮拆分}
+\section{题目、范围与轮次路线图}
 
 \subsection{C1 要回答的问题}
 
@@ -730,7 +752,7 @@ srun --partition=gpu --gres=gpu:1 --time=00:20:00 \
   '
 \end{lstlisting}
 
-\section{第一轮结论的强度与第二轮待办}
+\section{第一轮里程碑：结论强度与第二轮入口}
 
 \subsection{已有充分证据的结论}
 
@@ -775,6 +797,68 @@ srun --partition=gpu --gres=gpu:1 --time=00:20:00 \
 warmup/iters/repeats 和是否处于 profiler。C1 的价值不在于写出一条
 「用了 tcgen05」的结论，而在于把 tile、数值范围、状态依赖和实测指标连接为
 可复查、可反驳的因果链。
+\end{record}
+
+\clearpage
+\section{第二轮：精确性诊断与 K2 并行度方案}
+
+本章从第二轮开始，按时间追加；在本章开头先写下实验意图，避免见到结果后再
+倒推问题。第二轮的第一件事不是试图优化 kernel，而是界定 5090 上的
+\code{torch.equal} 失败究竟是非确定性、跨 chunk 才出现的舍入差异、state
+接口差异，还是更实质的错误。若不先完成这个区分，任何 K2 并行改写都没有
+可信的正确性基线。
+
+\subsection{R2.1：5090 精确性诊断---预注册设计}
+
+第一轮在 5090 上的官方 fixed test 报告极小但非零差异；B300 则 exact match。
+这只说明 ``bitwise identical'' 不成立，尚不足以说明算法错。新增独立脚本
+\code{challenge/diagnose\_5090\_exactness.py}，不改动 \FlashKDA{} 源码，
+直接复用官方 \code{tests/torch\_ref.py} 与官方 fixed 输入构造。它对每个 case
+记录下列项目：
+
+\begin{enumerate}
+  \item 相同 reference 连续运行两次是否 exact，排除 reference 自己的非确定性；
+  \item 相同 kernel 连续运行至少三次是否 exact，排除 kernel 执行非确定性；
+  \item output 和 final state 分别相对 reference 的 mismatch 个数、比例、
+        mean/max absolute error；
+  \item bf16 输出的 mismatch 是否超过 reference 相邻 bf16 表示值的一步；
+  \item 至多四个 mismatch 的 index、两端值和绝对误差，提供可人工复核的样本；
+  \item device name/capability、Torch/CUDA、extension 路径和 TF32 设置。
+\end{enumerate}
+
+\paragraph{边界矩阵。} \code{boundary} preset 覆盖 \(T=16,17,64,1024\)、
+\((T,H)=(8192,1),(8192,96)\) 及 \(T=8192,H=96\) 的 bf16/fp32 state 接口。
+\(T=16\) 恰好一个 chunk，\(T=17\) 第一次触发跨 chunk recurrence；H=1 与
+H=96 区分单个 K2 CTA 的算术问题和多 CTA 数量/调度因素。fp32 case 只检验
+公开 state 接口，不误称其已经检验了内部 fp32 recurrence。
+
+\paragraph{计划执行命令。} 以下命令将被实际执行；运行后的 Slurm job ID、
+完整 stdout log 和 JSON 摘要会在 R2.1 结果小节补记。诊断不是 benchmark，
+不使用其 wall clock 判定性能。
+
+\begin{lstlisting}
+ssh infra5090
+export C1_REPO=/home/lcpu/<user>/<repo>
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+
+srun --partition=lcpu-infra --gres=gpu:1 --time=00:30:00 \
+  --chdir="$C1_FLASH" bash -lc '
+    set -euo pipefail
+    "$C1_PY" ../challenge/diagnose_5090_exactness.py \
+      --preset boundary --seed 0 --repeats 3 \
+      --json ../results/diagnose_5090_boundary.json \
+      2>&1 | tee ../results/diagnose_5090_boundary.log
+  '
+\end{lstlisting}
+
+\subsection{R2.1：执行记录与结果}
+
+\begin{record}{状态：待执行}
+本小节在文档重命名、脚本语法检查和脚本推送后开始实际 5090 Slurm 运行。
+在没有 JSON 与 stdout log 前，不对 5090 差异的原因作新结论。
 \end{record}
 
 \end{document}
