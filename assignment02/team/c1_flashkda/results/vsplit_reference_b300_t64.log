@@ -1,0 +1,21 @@
+srun: error: Srun communication socket apparently being written to by something other than Slurm
+srun: job 23479 queued and waiting for resources
+srun: error: Ignoring job_complete for job 23480 because our job ID is 23479
+srun: job 23479 has been allocated resources
+{
+  "T": 64,
+  "final_state": {
+    "different": 0,
+    "exact": true,
+    "max_abs": 0.0,
+    "mean_abs": 0.0
+  },
+  "output": {
+    "different": 0,
+    "exact": true,
+    "max_abs": 0.0,
+    "mean_abs": 0.0
+  },
+  "seed": 0,
+  "split": 64
+}

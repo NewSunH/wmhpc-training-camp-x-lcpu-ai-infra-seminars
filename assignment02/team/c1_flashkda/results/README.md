@@ -19,3 +19,7 @@ git；报告中的结论同时记录了关键计数和指标。
   `bin/` 加入 `PATH` 时 PyTorch JIT 找不到 Ninja 的失败，以记录环境修复过程。
 - `k2_resource_limits_b300.log`：第二轮 job 23452；B300 的 SM 数、每 SM
   thread/shared-memory/register 上限，用于 K2 CTA 并行度的资源上界分析。
+- `vsplit_reference_b300_t{16,17,64}.{log,json}`：第三轮的列切分 reference
+  oracle。三个长度的 output 与 final state 均逐元素完全一致；对应 Slurm job 为
+  23473、23478、23479。T=64 日志还保留了一次 Slurm client 通信告警，数值 JSON
+  仍由脚本完整写出，不能把该次运行用于调度性能判断。
