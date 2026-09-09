@@ -832,11 +832,16 @@ warmup/iters/repeats 和是否处于 profiler。C1 的价值不在于写出一�
 H=96 区分单个 K2 CTA 的算术问题和多 CTA 数量/调度因素。fp32 case 只检验
 公开 state 接口，不误称其已经检验了内部 fp32 recurrence。
 
-\paragraph{计划执行命令。} 以下命令将被实际执行；运行后的 Slurm job ID、
-完整 stdout log 和 JSON 摘要会在 R2.1 结果小节补记。诊断不是 benchmark，
-不使用其 wall clock 判定性能。
+\paragraph{实际执行命令、脚本身份和作业。} 两台机器上运行的是同一份脚本；
+复制后分别以 \code{sha256sum} 核验，SHA-256 均为
+\code{ba6ba8b977c21336697f1b29bf75daf662089886ada9e73f9f9e567361b65566}。
+诊断不是 benchmark，wall clock 不用于任何性能判断。为遵守登录节点约定，
+Python、JIT 与 CUDA 均在 \code{srun} 分配内发生。5090 远端主仓库停在旧
+commit 且 \code{assignment02/} 是未跟踪目录；因此没有 \code{git pull}、reset
+或清理远端工作树，只复制这个已经提交的独立脚本到 C1 的 \code{challenge/}。
 
 \begin{lstlisting}
+# 5090：job 9875，partition=lcpu-infra，node=gj-5090-1，最终 COMPLETED (3m11s)
 ssh infra5090
 export C1_REPO=/home/lcpu/<user>/<repo>
 export C1_A2=$C1_REPO/assignment02
@@ -844,21 +849,104 @@ export C1_DIR=$C1_A2/team/c1_flashkda
 export C1_FLASH=$C1_DIR/FlashKDA
 export C1_PY=$C1_A2/.venv/bin/python
 
-srun --partition=lcpu-infra --gres=gpu:1 --time=00:30:00 \
-  --chdir="$C1_FLASH" bash -lc '
-    set -euo pipefail
-    "$C1_PY" ../challenge/diagnose_5090_exactness.py \
-      --preset boundary --seed 0 --repeats 3 \
-      --json ../results/diagnose_5090_boundary.json \
-      2>&1 | tee ../results/diagnose_5090_boundary.log
-  '
+cd "$C1_FLASH"
+srun --partition=lcpu-infra --gres=gpu:1 --time=00:30:00 --chdir="$PWD" \
+  "$C1_PY" ../challenge/diagnose_5090_exactness.py \
+    --preset boundary --seed 0 --repeats 3 \
+    --json ../results/diagnose_5090_boundary.json \
+    2>&1 | tee ../results/diagnose_5090_boundary.log
+
+# B300：第一次 job 23441 失败；第二次 job 23442 成功。
+# 失败/修复原因见本节的环境记录；成功运行显式把 venv/bin 加入 PATH。
+ssh infrab300
+export C1_REPO=/home/lcpu/<user>/<repo>
+export C1_A2=$C1_REPO/assignment02
+export C1_DIR=$C1_A2/team/c1_flashkda
+export C1_FLASH=$C1_DIR/FlashKDA
+export C1_PY=$C1_A2/.venv/bin/python
+cd "$C1_FLASH"
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 --chdir="$PWD" \
+  env PATH="$C1_A2/.venv/bin:$PATH" "$C1_PY" -u \
+    ../challenge/diagnose_5090_exactness.py \
+    --preset boundary --seed 0 --repeats 3 \
+    --json ../results/diagnose_b300_boundary_path.json \
+    2>&1 | tee ../results/diagnose_b300_boundary_path.log
 \end{lstlisting}
 
 \subsection{R2.1：执行记录与结果}
 
-\begin{record}{状态：待执行}
-本小节在文档重命名、脚本语法检查和脚本推送后开始实际 5090 Slurm 运行。
-在没有 JSON 与 stdout log 前，不对 5090 差异的原因作新结论。
+\subsubsection{环境与一次可恢复的启动失败}
+
+5090 job 9875 成功结束。JSON 中记录的设备是 NVIDIA GeForce RTX 5090，
+compute capability 12.0；Python 是 3.10.12，\Fla{} 相关环境为
+Torch \code{2.13.0+cu130}/CUDA \code{13.0}，且
+\code{torch.backends.cuda.matmul.allow\_tf32=False}。
+
+B300 的首次 job 23441 在导入官方 \code{tests/torch\_ref.py} 时失败，
+错误不是 FlashKDA kernel，而是 PyTorch \code{load\_inline} 提示缺 Ninja。
+随后的只读检查证明 \code{\$C1\_A2/.venv/bin/ninja} 已存在，真正原因是以
+绝对路径启动 Python 时没有 activate venv，故 venv 的 \code{bin/} 不在
+\code{PATH}。该失败 stdout 被保留为
+\code{results/diagnose\_b300\_boundary\_no\_venv\_path.log}；没有重装依赖。
+第二次 job 23442 将 \code{\$C1\_A2/.venv/bin} 前置到 \code{PATH} 后成功。
+B300 JSON 中设备为 NVIDIA B300 SXM6 AC、compute capability 10.3；Python
+是 3.12.13，Torch/CUDA/TF32 设置与 5090 JSON 相同。
+
+\subsubsection{位级稳定性和两卡对照}
+
+所有 7 个 case 中，reference 连续执行两次均 exact；每个设备的 FlashKDA
+连续执行三次也均输出/最终 state exact。这排除了本诊断条件下的随机调度或
+未初始化输出。下表的 ``5090 out/state'' 写作
+``mismatch 个数/总元素数（最大绝对误差）''；out 的 ``$>1$ ulp'' 是不止相邻
+bf16 表示值一步的 mismatch 数。B300 每一格都是零，故压缩为 ``0（exact）''。
+
+{\footnotesize
+\setlength{\tabcolsep}{2pt}
+\begin{longtable}{@{}L{0.17\linewidth}L{0.13\linewidth}L{0.23\linewidth}L{0.23\linewidth}L{0.10\linewidth}@{}}
+\toprule
+case & \((T,H,\mathrm{state})\) & 5090 output & 5090 final state & B300 \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+T16-H96 & \((16,96,\mathrm{bf16})\) & 5656/196608 (0.03125; $>1$ ulp: 1957) & 1143/1572864 (0.001953125) & 0 (exact) \\
+T17-H96 & \((17,96,\mathrm{bf16})\) & 5671/208896 (0.03125; $>1$ ulp: 1962) & 189/1572864 (0.00048828125) & 0 (exact) \\
+T64-H96 & \((64,96,\mathrm{bf16})\) & 5701/786432 (0.03125; $>1$ ulp: 1967) & 6/1572864 (0.0000038147) & 0 (exact) \\
+T1024-H96 & \((1024,96,\mathrm{bf16})\) & 5079/12582912 (0.0078125; $>1$ ulp: 1719) & 142/1572864 (0.0001220703) & 0 (exact) \\
+T8192-H1 & \((8192,1,\mathrm{bf16})\) & 55/1048576 (0.0001220703; $>1$ ulp: 18) & 0/16384 (0) & 0 (exact) \\
+T8192-H96 & \((8192,96,\mathrm{bf16})\) & 9110/100663296 (0.0625; $>1$ ulp: 3177) & 49/1572864 (0.0000076294) & 0 (exact) \\
+T8192-H96 & \((8192,96,\mathrm{fp32})\) & 9110/100663296 (0.0625; $>1$ ulp: 3177) & 49/1572864 (0.0000076294) & 0 (exact) \\
+\end{longtable}
+}
+
+对官方 \((T,H,D)=(8192,96,128)\) case，5090 output 的 mean absolute error
+为 \(7.6343181\times10^{-9}\)，相对 reference mean-absolute-value 的比为
+\(4.3401567\times10^{-9}\)。这说明总体均值很小，但不等于 ``只差一 ulp''：
+该 case 有 3177 个 output mismatch 超过相邻 bf16 表示值的一步，最大值为
+0.0625。因此报告同时保存计数、最大值和均值，不能只展示一个平均相对误差。
+
+\begin{decision}{R2.1 可以和不可以得出的结论}
+\textbf{可以：} 5090 的 strict mismatch 是可重复的；它在 \(T=16\) 的单
+chunk case 已出现，所以不能归咎于跨 chunk recurrence；H=1 时仍有 55 个
+output mismatch，因此也不能归咎于 ``多 head 才会出错''；bf16/fp32 的公开
+state 接口使 H=96 的 output/state mismatch 计数完全相同，支持第一轮的源码
+发现---它没有改变内部 bf16 recurrence。相同诊断在 B300 的所有 case 均 exact，
+也复核了第一轮 B300 结论。
+
+\textbf{不可以：} 这还没有证明 5090 kernel 算法错误，更不能从两张不同设备
+推出唯一根因。两边 GPU capability 不同，Python 小版本也不同；尽管 Torch/CUDA
+版本、脚本、seed、输入规则、TF32 设置和 extension API 一致，仍需下一步用
+SASS/编译选项、reference 中 \code{load\_inline} 生成的 JIT kernel 以及更小
+的单 MMA 对照去区分硬件/工具链/舍入路径。第二轮后续的 K2 prototype 正确性
+采用 B300 exact 对拍为硬门槛；5090 只报告误差分布，不能使用 \code{torch.equal}
+作为唯一通过标准。
+\end{decision}
+
+\begin{record}{可审计产物}
+\code{results/diagnose\_5090\_boundary.log} 与 \code{.json} 是 job 9875 的
+stdout/结构化摘要；\code{results/diagnose\_b300\_boundary\_path.log} 与
+\code{.json} 是 job 23442 的成功记录；\code{diagnose\_b300\_boundary\_no\_venv\_path.log}
+保留 job 23441 的 PATH 失败。这些均为小文件，将随本轮 commit 进入 git。
 \end{record}
 
 \end{document}

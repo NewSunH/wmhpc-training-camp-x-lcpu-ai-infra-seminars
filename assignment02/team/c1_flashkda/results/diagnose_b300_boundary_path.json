@@ -1,0 +1,333 @@
+{
+  "environment": {
+    "device_capability": [
+      10,
+      3
+    ],
+    "device_name": "NVIDIA B300 SXM6 AC",
+    "flash_kda_module": "<C1_REPO>/assignment02/team/c1_flashkda/FlashKDA/flash_kda/__init__.py",
+    "tf32_matmul_allowed": false,
+    "torch": "2.13.0+cu130",
+    "torch_cuda": "13.0"
+  },
+  "preset": "boundary",
+  "purpose": "FlashKDA exactness/repeatability diagnostic; not a benchmark",
+  "repeats": 3,
+  "results": [
+    {
+      "case": {
+        "h": 96,
+        "name": "one_chunk_h96",
+        "state_dtype": "bf16",
+        "t": 16
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 196608
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 11.386651511769742
+    },
+    {
+      "case": {
+        "h": 96,
+        "name": "two_chunks_h96",
+        "state_dtype": "bf16",
+        "t": 17
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 208896
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 0.18936806917190552
+    },
+    {
+      "case": {
+        "h": 96,
+        "name": "four_chunks_h96",
+        "state_dtype": "bf16",
+        "t": 64
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 786432
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 0.3709076102823019
+    },
+    {
+      "case": {
+        "h": 96,
+        "name": "sixtyfour_chunks_h96",
+        "state_dtype": "bf16",
+        "t": 1024
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 12582912
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 5.986717729829252
+    },
+    {
+      "case": {
+        "h": 1,
+        "name": "official_fixed_h1",
+        "state_dtype": "bf16",
+        "t": 8192
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 16384
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1048576
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 0.5044927569106221
+    },
+    {
+      "case": {
+        "h": 96,
+        "name": "official_fixed_h96_bf16",
+        "state_dtype": "bf16",
+        "t": 8192
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 100663296
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 47.49159993324429
+    },
+    {
+      "case": {
+        "h": 96,
+        "name": "official_fixed_h96_fp32",
+        "state_dtype": "fp32",
+        "t": 8192
+      },
+      "final_state_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "total_elements": 1572864
+      },
+      "kernel_repeatability": [
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 1
+        },
+        {
+          "final_state_equal_to_repeat_0": true,
+          "output_equal_to_repeat_0": true,
+          "repeat": 2
+        }
+      ],
+      "output_vs_reference": {
+        "different_elements": 0,
+        "different_fraction": 0.0,
+        "equal": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "mean_relative_to_mean_abs_ref": 0.0,
+        "mismatches_beyond_one_bf16_ulp": 0,
+        "total_elements": 100663296
+      },
+      "reference_repeatability": {
+        "final_state_equal": true,
+        "output_equal": true
+      },
+      "wall_seconds_including_reference": 47.31507169501856
+    }
+  ],
+  "seed": 0
+}
