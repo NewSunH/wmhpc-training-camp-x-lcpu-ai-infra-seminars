@@ -1270,4 +1270,111 @@ shared memory、registers 和 achieved occupancy，再以官方 \(H=96\) benchma
 比较端到端时间；手工 split store 使负性能结果完全可能。
 \end{record}
 
+\subsection{R3.3：资源实测和同环境性能对照}
+
+\subsubsection{NCU recurrence profile}
+
+R3.2 的 threads=128 和 grid-y=2H 只是 launch 源码中的常量；R3.3 用 NCU
+确认它们是否真的出现在已安装的 binary。profile 使用 fixed
+\([8192,96,128]\)，\code{warmup=0, iters=1, repeats=1}，只筛选 recurrence
+kernel。job 23499 首先用了 \code{--page raw}；该页面将设备属性和极长 C++
+kernel type 一并输出，难以在报告中复核。job 23500 以相同 metrics 改用
+\code{--page details}，并从 details CSV 提取下列简表。两次 NCU 运行的计时均会
+受到 profiler 扰动，故不用于性能比较。
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+srun --partition=gpu --gres=gpu:1 --time=00:30:00 --chdir="$PWD" \
+  env PATH="$C1_A2/.venv/bin:$PATH" \
+  ncu --target-processes application-only --csv --page details \
+    -k "regex:_flash_kda_fwd_recurrence" \
+    --metrics launch__block_size,launch__grid_size,\
+launch__shared_mem_per_block_dynamic,launch__registers_per_thread,\
+sm__warps_active.avg.pct_of_peak_sustained_active \
+    "$C1_PY" benchmarks/bench_fwd.py --mode fixed --H 96 \
+    --warmup 0 --iters 1 --repeats 1
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{c c c c c c}
+\toprule
+profile IDs & block & grid-y & regs/thread & dynamic smem & active warps \\
+\midrule
+0--1 & 128 & 192 & 70 & 98,432 B & 8.12\% \\
+2--3 & 128 & 192 & 70 & 98,432 B & 8.13\% \\
+4--5 & 128 & 192 & 72 & 98,432 B & 8.14\% \\
+\bottomrule
+\end{tabular}
+\caption{R3.3 job 23500 的 six recurrence captures。完整数值提取为
+\code{results/vsplit\_native\_ncu\_summary\_b300.csv}。每个 state 变体含
+warmup 和 measured call 两次 capture。}
+\end{table}
+
+NCU 验证 split launch 确为 \((1,192,1)\)，即 \(N=1,H=96\) 时的 \(2H\) CTA；
+每 CTA 128 threads、70--72 registers/thread。dynamic shared memory 没有从
+baseline 的 98,432 B 降低，因为 prototype 保留完整 state 和三 stage input
+storage。按 B300 的 233,472 B/SM 上限，shared memory 仍允许至多两个这样的 CTA
+同驻留；但实际 active-warp 指标仅为 8.12--8.14\%，不能从这一原型声称占用率
+收益。该数字同时反映了 192 个四-warp CTA 在 148 SM 上的有限 grid 覆盖。
+
+\subsubsection{CUDA event 同环境对照}
+
+先在已经安装 split extension 的 job 23501 运行官方 benchmark 设置
+\code{warmup=30, iters=200, repeats=5}。随后显式设
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2=0}，以同一 uv pip reinstall editable
+流程在 job 23502 重建版本 \code{0.0.1+baseline.r3}，最后在 job 23504 用完全
+相同 benchmark 命令测基线。因而这不是与第一轮旧日志的跨构建/跨时段比较。
+
+\begin{lstlisting}
+# split 已安装时：job 23501
+"$C1_PY" benchmarks/bench_fwd.py --mode fixed --H 96 \
+  --warmup 30 --iters 200 --repeats 5
+
+# baseline rebuild：job 23502
+env FLASH_KDA_C1_VSPLIT_K2=0 FLASH_KDA_VERSION_SUFFIX=+baseline_r3 \
+    NVCC_THREADS=8 \
+  uv pip install --python "$C1_PY" --no-build-isolation --no-deps \
+    --reinstall --editable .
+
+# baseline 已安装时：job 23504
+"$C1_PY" benchmarks/bench_fwd.py --mode fixed --H 96 \
+  --warmup 30 --iters 200 --repeats 5
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+state variant & split mean (ms) & baseline mean (ms) & split/baseline \\
+\midrule
+BF16 state-in/out & 5.5842 & 1.7561 & 3.1799$\times$ \\
+no state & 2.9064 & 1.7637 & 1.6479$\times$ \\
+FP32 state-in/out & 2.9342 & 1.7135 & 1.7124$\times$ \\
+\bottomrule
+\end{tabular}
+\caption{R3.3 B300 fixed \([8192,96,128]\) end-to-end CUDA event mean。
+split 和 baseline 的原始日志分别为
+\code{results/vsplit\_native\_bench\_h96\_b300.log} 和
+\code{results/vsplit\_baseline\_bench\_h96\_b300.log}。}
+\end{table}
+
+三种 state 变体均为负结果，且 BF16 state-in/state-out 慢约 \(3.18\times\)。
+这与 prototype 的边界一致：两个 CTA 重复读取全宽 \(v\) 和 K1 workspace；
+output/final-state 为避免写竞争而由单个 store leader 做标量分片写回；同时 shared
+memory 并未缩小。实验没有将这三个机制分别计数归因，故不把某一个机制写成唯一
+原因，但现有设计的总开销已经明确超过额外 CTA 并行所带来的收益。
+
+\begin{record}{第三轮结论}
+第三轮完成了从 reference 语义、native CUDA exactness 到 NCU 和同环境 benchmark
+的闭环。64+64 value-column split 在 reference 和五个 native representative
+case 上均精确；因此它实现了正确的可执行 prototype。然而它没有实现优化目标：
+官方 fixed \(H=96\) 的三种 state 配置都慢于 baseline。默认 build 和已验证
+baseline 保持不变。若继续此方向，下一轮的前提是 redesign 为分片 TMA
+load/store，并缩小 state/input shared-memory footprint；在此之前不应将当前
+prototype 作为提交版本或答辩中的性能方案。
+\end{record}
+
 \end{document}

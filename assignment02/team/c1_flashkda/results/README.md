@@ -29,3 +29,10 @@ git；报告中的结论同时记录了关键计数和指标。
   <B300_REPO>。
 - vsplit_native_smoke_b300.{log,json}：第三轮 job 23495 的 native exactness
   矩阵；五个 fixed-length/state 配置的 output 及（适用时）final state 均 exact。
+- vsplit_native_ncu_summary_b300.csv：第三轮 job 23500 的 NCU details 提取；
+  六次 recurrence capture 均为 block=128、grid-y=192、98,432 B dynamic smem，
+  register/thread 为 70 或 72，active warps 为 8.12--8.14%。
+- vsplit_{native,baseline}_bench_h96_b300.log：第三轮同一 B300 环境的官方
+  30/200/5 fixed H96 event benchmark（job 23501 和 23504）；split prototype 在
+  三个 state 变体均慢于 baseline。vsplit_baseline_build_b300.log 记录了 job
+  23502 关闭编译开关后的基线重建，远程绝对路径已替换为占位符。
