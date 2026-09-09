@@ -1,0 +1,7 @@
+srun: job 23239 queued and waiting for resources
+srun: job 23239 has been allocated resources
+device=cuda samples=1048576 seed=0
+bf16 min normal ~= 2^-126; bf16 min subnormal ~= 2^-133
+CHUNK=16 log2_range=[-103.066, -0.000] exp2_range=[9.419e-32, 9.998e-01] bf16_zero_fraction=0.000000
+CHUNK=32 log2_range=[-189.270, -0.000] exp2_range=[0.000e+00, 9.998e-01] bf16_zero_fraction=0.098475
+CHUNK=64 log2_range=[-347.805, -0.000] exp2_range=[0.000e+00, 9.998e-01] bf16_zero_fraction=0.547464

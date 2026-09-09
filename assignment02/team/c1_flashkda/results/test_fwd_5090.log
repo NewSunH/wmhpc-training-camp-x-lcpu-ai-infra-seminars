@@ -1,0 +1,10 @@
+Testing shape: [1, 8192, 96, 128]
+42752.0 42752.0
+  output | avg_rtol: 4.340156678495077e-09, max_rtol: 1.3563368383984198e-06
+  output | avg_atol: 7.634318066607193e-09, max_atol: 0.0625
+Traceback (most recent call last):
+  File "/home/lcpu/newsunh/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA/tests/test_fwd.py", line 428, in <module>
+    test_fwd()
+  File "/home/lcpu/newsunh/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA/tests/test_fwd.py", line 260, in test_fwd
+    assert torch.equal(out_kernel, out_ref), "output mismatch between kernel and torch ref"
+AssertionError: output mismatch between kernel and torch ref

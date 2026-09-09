@@ -1,0 +1,7 @@
+Current Python version 3.10 is below the recommended 3.11 version. It is recommended to upgrade to Python 3.11 or higher for the best experience.
+shape=[8192,96,128] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=2.6175 ms, min=2.6063 ms, max=2.8002 ms
+  flash_kda (no state)   : mean=2.6113 ms, min=2.6009 ms, max=2.7298 ms
+  flash_kda (fp32 state) : mean=2.6246 ms, min=2.6153 ms, max=2.8079 ms
+  chunk_kda : mean=5.4288 ms, min=5.4084 ms, max=5.7284 ms
+  chunk_gated_delta_rule : mean=3.0877 ms, min=3.0644 ms, max=3.5527 ms

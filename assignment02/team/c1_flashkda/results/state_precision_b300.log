@@ -1,0 +1,9 @@
+srun: job 23241 queued and waiting for resources
+srun: job 23241 has been allocated resources
+shape=[1,1024,4,128] seed=0
+bf16_state vs fp32_state output: max_abs=0.000000e+00 mean_abs=0.000000e+00 max_rel=0.000000e+00
+bf16_state vs fp32_state final: max_abs=0.000000e+00 mean_abs=0.000000e+00 max_rel=0.000000e+00
+bf16_state vs FLA output: max_abs=4.882812e-04 mean_abs=1.289556e-05 max_rel=7.073793e+01
+fp32_state vs FLA output: max_abs=4.882812e-04 mean_abs=1.289556e-05 max_rel=7.073793e+01
+bf16_state vs FLA final: max_abs=3.915220e-03 mean_abs=9.135994e-05 max_rel=9.991322e+01
+fp32_state vs FLA final: max_abs=3.915220e-03 mean_abs=9.135994e-05 max_rel=9.991322e+01

@@ -1,0 +1,6 @@
+shape=[8192,96,128] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=1.7574 ms, min=1.7524 ms, max=1.7738 ms
+  flash_kda (no state)   : mean=1.7630 ms, min=1.7534 ms, max=1.7805 ms
+  flash_kda (fp32 state) : mean=1.7139 ms, min=1.7022 ms, max=1.7359 ms
+  chunk_kda : mean=3.6053 ms, min=3.5873 ms, max=3.6891 ms
+  chunk_gated_delta_rule : mean=1.9768 ms, min=1.9644 ms, max=2.0581 ms

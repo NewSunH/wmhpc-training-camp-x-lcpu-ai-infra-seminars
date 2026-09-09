@@ -1,0 +1,19 @@
+Current Python version 3.10 is below the recommended 3.11 version. It is recommended to upgrade to Python 3.11 or higher for the best experience.
+shape=[8192,96,128] warmup=30 iters=200 repeats=5
+  flash_kda (bf16 state) : mean=2.6148 ms, min=2.6039 ms, max=3.3324 ms
+  flash_kda (no state)   : mean=2.6089 ms, min=2.5997 ms, max=2.8387 ms
+  flash_kda (fp32 state) : mean=2.6212 ms, min=2.6098 ms, max=3.0383 ms
+  chunk_kda : mean=5.4165 ms, min=5.3877 ms, max=6.4446 ms
+  chunk_gated_delta_rule : mean=3.0850 ms, min=3.0685 ms, max=3.2965 ms
+varlen shape=[8192,96,128] seq_lens=[1300, 547, 2048, 963, 271, 3063] warmup=30 iters=200 repeats=5
+  flash_kda (bf16 state) : mean=2.3280 ms, min=2.3108 ms, max=2.5113 ms
+  flash_kda (no state)   : mean=2.3043 ms, min=2.2883 ms, max=2.3916 ms
+  flash_kda (fp32 state) : mean=2.3529 ms, min=2.3363 ms, max=2.4439 ms
+  chunk_kda : mean=5.4629 ms, min=5.4426 ms, max=5.7522 ms
+  chunk_gated_delta_rule : mean=3.1463 ms, min=3.1302 ms, max=3.3640 ms
+varlen shape=[8192,96,128] seq_lens=[1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024] warmup=30 iters=200 repeats=5
+  flash_kda (bf16 state) : mean=2.0546 ms, min=2.0494 ms, max=2.1491 ms
+  flash_kda (no state)   : mean=2.0267 ms, min=2.0209 ms, max=2.1130 ms
+  flash_kda (fp32 state) : mean=2.0865 ms, min=2.0804 ms, max=2.1702 ms
+  chunk_kda : mean=5.4488 ms, min=5.4323 ms, max=5.7910 ms
+  chunk_gated_delta_rule : mean=3.1189 ms, min=3.1076 ms, max=3.3634 ms

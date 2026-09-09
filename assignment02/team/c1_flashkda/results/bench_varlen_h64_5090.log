@@ -1,0 +1,13 @@
+Current Python version 3.10 is below the recommended 3.11 version. It is recommended to upgrade to Python 3.11 or higher for the best experience.
+varlen shape=[8192,64,128] seq_lens=[1300, 547, 2048, 963, 271, 3063] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=1.6745 ms, min=1.6590 ms, max=1.8380 ms
+  flash_kda (no state)   : mean=1.6603 ms, min=1.6522 ms, max=1.7787 ms
+  flash_kda (fp32 state) : mean=1.6907 ms, min=1.6777 ms, max=1.7736 ms
+  chunk_kda : mean=3.5726 ms, min=3.5591 ms, max=3.8644 ms
+  chunk_gated_delta_rule : mean=2.0698 ms, min=2.0544 ms, max=2.3270 ms
+varlen shape=[8192,64,128] seq_lens=[1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=1.4718 ms, min=1.4668 ms, max=1.5169 ms
+  flash_kda (no state)   : mean=1.4506 ms, min=1.4440 ms, max=1.4832 ms
+  flash_kda (fp32 state) : mean=1.4965 ms, min=1.4904 ms, max=1.5830 ms
+  chunk_kda : mean=3.6000 ms, min=3.5765 ms, max=3.8652 ms
+  chunk_gated_delta_rule : mean=2.0631 ms, min=2.0541 ms, max=2.3093 ms

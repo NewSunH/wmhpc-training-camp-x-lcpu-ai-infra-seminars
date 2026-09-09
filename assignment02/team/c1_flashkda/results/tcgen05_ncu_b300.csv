@@ -1,0 +1,55 @@
+srun: job 23235 queued and waiting for resources
+srun: job 23235 has been allocated resources
+==PROF== Connected to process 88939 (/home/lcpu/10578328/c1_tcgen05_probe.p4OjJy/tcgen05_sm103)
+host_tensor_A:	ptr[16b](0x6211dd3b5c10) o (128,64):(64,_1)
+host_tensor_B:	ptr[16b](0x6211dd3d9720) o (256,64):(64,_1)
+host_tensor_C:	ptr[32b](0x71a494a0a010) o (128,256):(256,_1)
+Running for problem shape (MxNxK): 128x256x64
+TiledMMA
+  ThrLayoutVMNK:  (_1,_1,_1,_1):(_0,_0,_0,_0)
+  PermutationMNK: (_,_,_)
+MMA_Atom
+  ThrID:      _1:_0
+  Shape_MNK:  (_128,_256,_16)
+  LayoutA_TV: (_1,(_128,_16)):(_0,(_1,_128))
+  LayoutB_TV: (_1,(_256,_16)):(_0,(_1,_256))
+  LayoutC_TV: (_1,(_128,_256)):(_0,(_1,_128))
+mma_shape_A:	((_128,_16),_1,_4)
+mma_shape_B:	((_256,_16),_1,_4)
+sA_layout:	Sw<3,4,3> o smem_ptr[16b](unset) o ((_128,_16),_1,_4):((_64,_1),_0,_16)
+sB_layout:	Sw<3,4,3> o smem_ptr[16b](unset) o ((_256,_16),_1,_4):((_64,_1),_0,_16)
+Grid launched: 1, 1, 1
+Cluster launched: 1, 1, 1
+mA:	gmem_ptr[16b](0x71a258620000) o (128,64):(64,_1)
+mB:	gmem_ptr[16b](0x71a258624000) o (256,64):(64,_1)
+mC:	gmem_ptr[32b](0x71a25862c000) o (128,256):(256,_1)
+mD:	gmem_ptr[32b](0x71a258600000) o (128,256):(256,_1)
+gA:	gmem_ptr[16b](0x71a258620000) o (_128,_64,1):(64,_1,_64)
+gB:	gmem_ptr[16b](0x71a258624000) o (_256,_64,1):(64,_1,_64)
+gC:	gmem_ptr[32b](0x71a25862c000) o (_128,_256):(256,_1)
+gD:	gmem_ptr[32b](0x71a258600000) o (_128,_256):(256,_1)
+tCgA:	gmem_ptr[16b](0x71a258620000) o ((_128,_16),_1,_4,1):((64,_1),_0,_16,_64)
+tCgB:	gmem_ptr[16b](0x71a258624000) o ((_256,_16),_1,_4,1):((64,_1),_0,_16,_64)
+tCgC:	gmem_ptr[32b](0x71a25862c000) o ((_128,_256),_1,_1):((256,_1),_0,_0)
+tCgD:	gmem_ptr[32b](0x71a258600000) o ((_128,_256),_1,_1):((256,_1),_0,_0)
+tCsA:	Sw<3,4,3>_smem_ptr[16b](0x71a300000400) o ((_128,_16),_1,_4):((_64,_1),_0,_16)
+tCsB:	Sw<3,4,3>_smem_ptr[16b](0x71a300004400) o ((_256,_16),_1,_4):((_64,_1),_0,_16)
+tCrA:	UMMA::DescriptorIterator o (_1,_1,_4):(_0,_0,_2)
+tCrB:	UMMA::DescriptorIterator o (_1,_1,_4):(_0,_0,_2)
+tCtAcc:	tmem_[32b](0x0000.0000) o ((_128,_256),_1,_1):((_65536,_1),_0,_0)
+Matrix A: 128x64 of half_t
+Matrix B: 256x64 of half_t
+Matrix C: 128x256 of float
+Infinity norm of A: 4.500000e+01
+Infinity norm of B: 4.600000e+01
+Infinity norm of C: 9.900000e+02
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.
+==PROF== Disconnected from process 88939
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","88939","tcgen05_sm103","127.0.0.1","void gemm_device<SharedStorage<half_t, half_t, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<128>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<256>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, tuple<C<128>, C<256>, C<64>>, TiledMMA<MMA_Atom<SM100_MMA_F16BF16_SS<half_t, half_t, float, 128, 256, 0, 0, 0, 0>>, Layout<tuple<C<1>, C<1>, C<1>>, tuple<C<0>, C<0>, C<0>>>, tuple<Underscore, Underscore, Underscore>>, tuple<C<1>, C<1>, C<1>>, float, float>(T2, T3, T4, T5, T6, T7, T8, T9, T10)","1","7","(128, 1, 1)","(1, 1, 1)","0","10.3","Command line profiler metrics","dram__bytes_read.sum","byte","856576"
+"0","88939","tcgen05_sm103","127.0.0.1","void gemm_device<SharedStorage<half_t, half_t, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<128>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<256>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, tuple<C<128>, C<256>, C<64>>, TiledMMA<MMA_Atom<SM100_MMA_F16BF16_SS<half_t, half_t, float, 128, 256, 0, 0, 0, 0>>, Layout<tuple<C<1>, C<1>, C<1>>, tuple<C<0>, C<0>, C<0>>>, tuple<Underscore, Underscore, Underscore>>, tuple<C<1>, C<1>, C<1>>, float, float>(T2, T3, T4, T5, T6, T7, T8, T9, T10)","1","7","(128, 1, 1)","(1, 1, 1)","0","10.3","Command line profiler metrics","dram__bytes_write.sum","byte","614656"
+"0","88939","tcgen05_sm103","127.0.0.1","void gemm_device<SharedStorage<half_t, half_t, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<128>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<256>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, tuple<C<128>, C<256>, C<64>>, TiledMMA<MMA_Atom<SM100_MMA_F16BF16_SS<half_t, half_t, float, 128, 256, 0, 0, 0, 0>>, Layout<tuple<C<1>, C<1>, C<1>>, tuple<C<0>, C<0>, C<0>>>, tuple<Underscore, Underscore, Underscore>>, tuple<C<1>, C<1>, C<1>>, float, float>(T2, T3, T4, T5, T6, T7, T8, T9, T10)","1","7","(128, 1, 1)","(1, 1, 1)","0","10.3","Command line profiler metrics","gpu__time_duration.avg","ns","25145728"
+"0","88939","tcgen05_sm103","127.0.0.1","void gemm_device<SharedStorage<half_t, half_t, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<128>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<256>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, tuple<C<128>, C<256>, C<64>>, TiledMMA<MMA_Atom<SM100_MMA_F16BF16_SS<half_t, half_t, float, 128, 256, 0, 0, 0, 0>>, Layout<tuple<C<1>, C<1>, C<1>>, tuple<C<0>, C<0>, C<0>>>, tuple<Underscore, Underscore, Underscore>>, tuple<C<1>, C<1>, C<1>>, float, float>(T2, T3, T4, T5, T6, T7, T8, T9, T10)","1","7","(128, 1, 1)","(1, 1, 1)","0","10.3","Command line profiler metrics","sm__pipe_tensor_cycles_active.avg.pct_of_peak_sustained_elapsed","%","0.00"
+"0","88939","tcgen05_sm103","127.0.0.1","void gemm_device<SharedStorage<half_t, half_t, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<128>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>, ComposedLayout<Swizzle<3, 4, 3>, smem_ptr_flag_bits<16>, Layout<tuple<tuple<C<256>, C<16>>, C<1>, C<4>>, tuple<tuple<C<64>, C<1>>, C<0>, C<16>>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const half_t *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<const float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, Tensor<ViewEngine<gmem_ptr<float *>>, Layout<tuple<int, int>, tuple<int, C<1>>>>, tuple<C<128>, C<256>, C<64>>, TiledMMA<MMA_Atom<SM100_MMA_F16BF16_SS<half_t, half_t, float, 128, 256, 0, 0, 0, 0>>, Layout<tuple<C<1>, C<1>, C<1>>, tuple<C<0>, C<0>, C<0>>>, tuple<Underscore, Underscore, Underscore>>, tuple<C<1>, C<1>, C<1>>, float, float>(T2, T3, T4, T5, T6, T7, T8, T9, T10)","1","7","(128, 1, 1)","(1, 1, 1)","0","10.3","Command line profiler metrics","sm__warps_active.avg.pct_of_peak_sustained_elapsed","%","0.04"
