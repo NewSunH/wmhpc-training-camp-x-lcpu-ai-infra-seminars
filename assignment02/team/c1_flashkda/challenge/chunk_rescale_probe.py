@@ -145,6 +145,7 @@ def tile_product_error(chunk: int, seed: int, device: torch.device) -> dict[str,
     l_term_overflow = int(torch.isinf(l_terms_fp16).sum().item())
     mqk_term_overflow = int(torch.isinf(mqk_terms_fp16).sum().item())
     return {
+        "chunk": chunk,
         "tiles": tiles,
         "d": d,
         "raw_prefix_min": float(prefix.min().item()),
@@ -170,12 +171,15 @@ def tile_product_error(chunk: int, seed: int, device: torch.device) -> dict[str,
 
 
 def range_case(chunk: int, samples: int, seed: int, device: torch.device) -> dict:
-    generator = torch.Generator(device=device)
-    generator.manual_seed(seed)
+    # Deliberately use the default CUDA generator, matching the historical
+    # chunk_range_probe.py stream.  Each chunk is grouped from the same scalar
+    # sample vector, so the three rows are comparable rather than three
+    # unrelated random draws.
+    torch.manual_seed(seed)
     n = (samples // chunk) * chunk
-    g = torch.randn(n, dtype=torch.bfloat16, device=device, generator=generator)
-    dt = torch.rand(n, dtype=torch.float32, device=device, generator=generator)
-    a_log = torch.rand(n, dtype=torch.float32, device=device, generator=generator)
+    g = torch.randn(n, dtype=torch.bfloat16, device=device)
+    dt = torch.rand(n, dtype=torch.float32, device=device)
+    a_log = torch.rand(n, dtype=torch.float32, device=device)
     z = torch.exp(a_log) * (g.float() + dt)
     gate = -5.0 * LOG2E * torch.sigmoid(z)
     prefix = gate[:n].reshape(-1, chunk).cumsum(dim=-1)
