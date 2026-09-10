@@ -1,0 +1,34 @@
+{
+  "H": 96,
+  "T": 16,
+  "output_different_elements": 196579,
+  "output_digest": "a97fb31e001c71ea4502160f21c1b31e0fb729aaf0ae7d0b0a172bf98233d838",
+  "output_equal_reference": false,
+  "output_max_abs_diff": 48896.0,
+  "output_mean_abs_diff": 888.1012573242188,
+  "output_nonzero_elements": 1536,
+  "reference_output_digest": "1bd9be12e3cdd353af0e2b3e71e1fc2404d19f9a97bbbcb35875da28ba049735",
+  "reference_state_digest": "6bce0b0a915d8ae9e0558d3449336999545500dee3359378409ea3cc792a046a",
+  "seed": 2027,
+  "state_digest": "6bce0b0a915d8ae9e0558d3449336999545500dee3359378409ea3cc792a046a",
+  "state_dtype": "bfloat16",
+  "state_equal_reference": true,
+  "timing": {
+    "max_ms": 0.04793599992990494,
+    "mean_ms": 0.0400383997708559,
+    "median_ms": 0.03932800143957138,
+    "min_ms": 0.03824000060558319,
+    "samples_ms": [
+      0.03824000060558319,
+      0.038495998829603195,
+      0.038495998829603195,
+      0.038656000047922134,
+      0.03903999924659729,
+      0.03932800143957138,
+      0.03951999917626381,
+      0.040031999349594116,
+      0.04064000025391579,
+      0.04793599992990494
+    ]
+  }
+}

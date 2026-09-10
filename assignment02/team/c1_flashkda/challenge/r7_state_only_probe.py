@@ -10,7 +10,8 @@ The extension is built in one of two compile-time modes:
 This script intentionally measures the complete public ``flash_kda.fwd`` call
 so that Kernel 1 and launch overhead remain visible.  The output buffer is
 initialized to zero; in state-only mode it must remain zero, while final_state
-must match the torch reference exactly.
+must match the torch reference exactly.  The probe also records output
+exactness/digests, which is required when evaluating R8 full-output candidates.
 """
 
 from __future__ import annotations
@@ -104,6 +105,9 @@ def run_case(T: int, H: int, seed: int, warmup: int, iters: int):
         initial_state=initial.clone(), final_state=ref_state,
     )
     state_equal_ref = bool(torch.equal(final_state, ref_state))
+    output_equal_ref = bool(torch.equal(out, ref_out))
+    output_diff = (out != ref_out)
+    output_abs = (out.float() - ref_out.float()).abs()
     output_nonzero = int(torch.count_nonzero(out).item())
 
     def invoke():
@@ -118,6 +122,12 @@ def run_case(T: int, H: int, seed: int, warmup: int, iters: int):
         "state_equal_reference": state_equal_ref,
         "state_digest": _digest(final_state),
         "reference_state_digest": _digest(ref_state),
+        "output_equal_reference": output_equal_ref,
+        "output_digest": _digest(out),
+        "reference_output_digest": _digest(ref_out),
+        "output_different_elements": int(output_diff.sum().item()),
+        "output_max_abs_diff": float(output_abs.max().item()),
+        "output_mean_abs_diff": float(output_abs.mean().item()),
         "output_nonzero_elements": output_nonzero,
         "timing": timing,
     }

@@ -1,0 +1,245 @@
+\section{R8 执行记录：完整 output epilogue 的候选筛选与 5090 迁移}
+
+\subsection{R8 目标与判定标准}
+
+R7 的 state-only 消融已经证明 output materialization 是重要成本，但它把
+\code{out} 置零，不能作为最终实现。R8 的目标改为：在完整 output 和
+final-state 都逐元素 exact 的前提下，减少 output fragment 的中间转换、
+shared-memory stage 或写回同步。每一个候选都必须同时满足：
+
+\begin{enumerate}
+  \item \code{output\_equal\_reference=true}，不仅检查非零数量；
+  \item \code{state\_equal\_reference=true}；
+  \item 候选和 control 使用同一源码、同一显式 \code{sm\_103a}、同一输入
+        seed=2027 和同一 CUDA-event 配置；
+  \item 性能差异要在重复测量中稳定，单次 NCU replay 不作为正式加速依据。
+\end{enumerate}
+
+R8 保持所有实验开关为编译期 opt-in，默认环境仍关闭
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2}、\code{FLASH\_KDA\_C1\_STATE\_ONLY}
+以及所有 R8 候选开关。这样候选失败时可以直接恢复 baseline。
+
+\subsection{候选 A：output pipeline stage 数}
+
+首先把 \code{kOutputStages=2} 暴露为
+\code{FLASH\_KDA\_C1\_OUTPUT\_STAGES=1,2,3}。候选只改变 output buffer
+和 pipeline state 数，不改变 MMA、BF16 rounding 或 TMA descriptor。B300
+上的构建方式为：
+
+\begin{lstlisting}
+export FLASH_KDA_CUDA_ARCHS=103a FLASH_KDA_C1_VSPLIT_K2=1
+export FLASH_KDA_C1_STATE_ONLY=0 FLASH_KDA_C1_OUTPUT_STAGES=1
+export FLASH_KDA_VERSION_SUFFIX=+r8.out1 NVCC_THREADS=8
+uv pip install --python <repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+python challenge/r7_state_only_probe.py --T 8192 --H 96 \
+  --warmup 10 --iters 30 --json results/r8_out1_t8192_h96.json
+\end{lstlisting}
+
+stage=1 的 final state exact，output 非零数量也与 full 相同，但 median 为
+2.158272 ms；同一轮 stage=2 control 为 2.035136 ms，stage=1 慢约 6.1\%。
+stage=3 的 median 为 2.002240 ms，表面上比 control 快约 1.6\%，但只有一轮
+且差异接近运行噪声，没有足够证据改变默认 stage=2。结果分别保存在
+\code{r8\_out1\_t8192\_h96.json} 和
+\code{r8\_out3\_t8192\_h96.json}。随后用增强后的探针在 T=16,H=96
+复核了两个 stage：\code{r8\_out1\_t16\_h96\_exact.json} 和
+\code{r8\_out3\_t16\_h96\_exact.json} 均报告 output/state exact，median
+分别为 0.038848/0.038784 ms。T=8192 的早期记录没有 digest 字段，故不以
+非零计数替代逐元素判据；stage=1/3 的性能结论仍只用于筛选，不作为默认
+加速。
+
+\subsection{候选 B：延后 output 的 BF16 rounding}
+
+原路径在 Phase 1 把 \(q@s\) 转成 BF16，在 Phase 4 将第二个 GEMM 转成
+BF16 后再做 BF16 add。R8 增加 \code{FLASH\_KDA\_C1\_OUT\_FP32=true}，
+尝试让两个 GEMM 在 FP32 accumulator 中相加，最后只转换一次：
+
+\begin{lstlisting}
+export FLASH_KDA_C1_VSPLIT_K2=1 FLASH_KDA_C1_OUT_FP32=true
+export FLASH_KDA_C1_OUTPUT_STAGES=2 FLASH_KDA_VERSION_SUFFIX=+r8.fp32out
+uv pip install --python <repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+python challenge/r7_state_only_probe.py --T 16 --H 96 \
+  --warmup 5 --iters 10 --json results/r8_fp32out_t16_h96_v2.json
+\end{lstlisting}
+
+该候选的 final state exact，但 output 不 exact：T=16,H=96 有 44,748 个
+元素不同，\(\max|\Delta|=256\)，平均绝对误差为 1.5455。原因不是 TMA
+写回，而是改变了原实现要求的 ``先舍入再 BF16 相加'' 顺序。即使目标尺寸
+的 event 数字约为 2.018592 ms，也不能接受该候选。
+
+\subsection{候选 C：fragment 直接写 global output}
+
+R7 的主要收益来自删除 output shared tile 和 output TMA pipeline，因此 R8
+尝试让 MMA warp 用同一 fragment 分区直接写 global memory。分别尝试了：
+
+\begin{enumerate}
+  \item 用 \code{thr\_mma.partition\_C(g\_out\_block)} 逐元素写；
+  \item 用 \code{UniversalCopy} 构造 global tiled copy；
+  \item 用既有 \code{smem\_tiled\_store\_C} 的 source/destination
+        thread/value map，配合 \code{idx2crd} 和 16x16 row-major tile。
+\end{enumerate}
+
+第二种方案在编译期触发 CuTe 的 ``CopyAtom rank-mismatch''；第一、三种
+方案可以编译和运行，但 output fragment 的 CuTe swizzled layout 与 global
+row-major layout 没有正确建立一一对应关系。以最后一个 direct7 版本为例，
+T=16,H=96 的 state exact，但 190,924 个 output 元素错误；虽然非零数量仍为
+196,581，\(\max|\Delta|=53,792\)。因此 direct global-store 不能进入生产
+路径，相关记录为：
+\code{r8\_direct\_t16\_h96.json}、
+\code{r8\_direct4\_t16\_h96.json}、
+\code{r8\_direct6\_t16\_h96.json} 和
+\code{r8\_direct7\_t16\_h96.json}；两次未通过编译的 CuTe
+UniversalCopy/layout 命令摘要另存为
+\code{results/r8\_direct\_compile\_failures.txt}。
+
+该失败说明不能只把 shared pointer 替换成 global pointer；必须先明确
+CuTe copy atom 的 thread/value 坐标映射，且还要单独处理非 16 对齐的 tail
+tile。R8 暂不把这个高风险方向扩大到更多形状。
+
+\subsection{候选 D：融合第二个 output GEMM 的转换与 BF16 add}
+
+最后保留原有 BF16 rounding 顺序，只合并中间的
+\code{gemm\_bf16} fragment：
+
+\begin{lstlisting}
+export FLASH_KDA_C1_VSPLIT_K2=1 FLASH_KDA_C1_OUTPUT_STAGES=2
+export FLASH_KDA_C1_FUSE_OUT_ADD=true FLASH_KDA_VERSION_SUFFIX=+r8.fuseadd
+uv pip install --python <repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+python challenge/r7_state_only_probe.py --T 16 --H 96 \
+  --warmup 5 --iters 10 --json results/r8_fuseadd_t16_h96.json
+python challenge/r7_state_only_probe.py --T 8192 --H 96 \
+  --warmup 10 --iters 50 --json results/r8_fuseadd_t8192_h96.json
+\end{lstlisting}
+
+T=16,H=96 和 T=8192,H=96 的 output 与 state 均位级 exact。为了排除
+R7 旧 binary 和节点频率差异，重新构建同源码的 fuse=0 control：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+case & control median (ms) & fused median (ms) & fused/control \\
+\midrule
+split, T=8192,H=1  & 1.128864 & 1.128928 & 1.000 \\
+split, T=8192,H=4  & \text{--} & 1.149664 & \text{not paired} \\
+split, T=8192,H=96 & 2.035136 & 2.035392 & 1.000 \\
+default, T=8192,H=96 & 1.760544 & 1.786912 & 1.015 \\
+\bottomrule
+\end{tabular}
+\caption{R8 fused output add 与同源码 control。split H=1/H=96 的差异低于
+测量噪声；默认非 split 路径反而慢约 1.5\%。完整 JSON 位于
+\code{results/r8\_fuseadd\_*.json}、\code{r8\_ctrlfull\_*.json} 和
+\code{r8\_base\{fuse,ctrl\}\_*.json}。}
+\end{table}
+
+因此 fused add 是 R8 唯一同时通过 output/state exactness 的完整 output
+候选，但没有稳定性能收益，暂不打开为默认配置。它仍保留为后续架构或
+寄存器布局变化时的可复测 probe。
+
+\subsection{5090 迁移支线}
+
+5090 代理首先在 \code{infra5090} 的 \code{gj-5090-1} 上确认：
+\code{torch.cuda.get\_device\_capability()} 为 \code{(12,0)}，因此编译
+目标应为 \code{compute\_120a,code=sm\_120a}。已有扩展探针（不是 R8
+state-only binary）在 T=8192、seed=2027、warmup=10、iters=30 下为：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r l r}
+\toprule
+H & median (ms) & state exact & output nonzero \\
+\midrule
+1  & 0.798144 & yes & 1,048,537 \\
+4  & 0.819392 & yes & 4,194,165 \\
+96 & 2.629152 & no  & 100,659,399 \\
+\bottomrule
+\end{tabular}
+\caption{5090 现有扩展环境探针；H=96 state 不 exact，不能作为优化胜负
+的正式 baseline。}
+\end{table}
+
+尝试在 5090 上编译 R7 state-only 时，nvcc 能识别 \code{sm\_120a}，但该
+远端副本缺少 CUTLASS 子模块，报错
+\code{fatal error: cutlass/bfloat16.h: No such file or directory}；登录
+节点的另一条路径还缺少 \code{Python.h}。所以本轮没有声称 5090 已经完成
+state-only/full 对照，也没有把 H=96 的不 exact 扩展与官方 benchmark 直接
+比较。完整环境、命令和结果在 \code{results/r8\_5090\_EVALUATION.md}。
+
+\subsection{低优先级 B300 baseline 复核}
+
+低优先级代理使用 \code{sbatch --wait --nice=10000} 排队复测默认
+\code{bench\_fwd.py}，没有修改主线源码。T=8192,H=96、warmup=10、
+iters=30、repeats=1 的结果为：
+
+\begin{lstlisting}
+flash_kda bf16 state : 1.7843 ms
+flash_kda no state   : 1.7839 ms
+flash_kda fp32 state : 1.7350 ms
+chunk_kda             : 3.7064 ms
+chunk_gated_delta     : 1.9965 ms
+\end{lstlisting}
+
+该结果与 R8 default control 的量级一致，且说明在 H=96 下 state dtype 只带来
+约 2.8\% 差异，不是本轮第一优先级瓶颈。日志为
+\code{results/r8\_lowprio\_baseline\_b300.log}。
+
+随后以同样的低优先级策略复测了 H=1：BF16 state、no-state、FP32 state
+分别为 1.2758、1.2759、1.2212 ms，两个 FLA 参考实现为 0.5300 和
+0.4293 ms（日志：\code{results/r8\_lowprio\_bench\_h1\_b300.log}）。
+FP32 state 相对 BF16 state 约快 4.3\%，但绝对差异仍很小，不能解释完整
+output 路径的主要成本。
+
+最后复测了 H=4 的 varlen 分段：序列长度
+\code{[1300,547,2048,963,271,3063]} 时 BF16/no-state/FP32 state 为
+0.5267/0.5242/0.5185 ms；八段等长 1024 时为 0.2139/0.2120/0.2177 ms。
+日志为 \code{results/r8\_lowprio\_varlen\_h4\_b300.log}。分段方式对总
+耗时的影响明显，而 state dtype 仍只造成小幅变化。
+
+\subsection{R8 判定与 R9 计划}
+
+R8 完成了从 state-only 阳性结果到完整 output 候选的筛选，但没有得到足以
+替换默认实现的稳定加速：stage=1 变慢，FP32 延后 rounding 不 exact，direct
+global store 的布局映射不正确，fused add exact 但中性。最终用关闭所有 R8
+开关的源码重新构建远端默认环境：
+
+\begin{lstlisting}
+unset FLASH_KDA_C1_OUTPUT_STAGES FLASH_KDA_C1_OUT_FP32
+unset FLASH_KDA_C1_DIRECT_OUT FLASH_KDA_C1_FUSE_OUT_ADD
+export FLASH_KDA_CUDA_ARCHS=103a FLASH_KDA_C1_VSPLIT_K2=0
+export FLASH_KDA_C1_STATE_ONLY=0 FLASH_KDA_VERSION_SUFFIX=+baseline.r8
+uv pip install --python <repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+\end{lstlisting}
+
+随后 T=16,H=1 默认 smoke 的 output/state 均 exact。R8 的下一步不是继续堆叠
+微小转换优化，而是：
+
+\begin{enumerate}
+  \item 在 5090 上补齐 CUTLASS、Python headers 和 GPU-backed build，先让
+        官方 baseline 与 R7 probe 在 SM120 上可重复；
+  \item 以 CuTe 的完整 copy map 为基础重新设计 vectorized output epilogue，
+        先用一个 16x16 tile dump 验证坐标，再考虑省掉 shared tile；
+  \item 若 direct epilogue 仍无法在两卡保持 exact，则停止扩大该路线，
+        转向减少 K1/K2 launch、TMA descriptor 和跨 CTA 固定开销；
+  \item 所有性能结论继续采用同源码 control、同卡、重复 CUDA events 的
+        配对判定，避免把不同轮次的频率和构建差异当作算法收益。
+\end{enumerate}
+
+stage exactness 补测之后，远端又执行了一次无 R8 开关的最终 restore（B300
+job 24459），并在新构建上运行 job 24461 的 T=16,H=1 smoke；结果仍为
+output/state exact。对应文件为
+\code{results/r8\_baseline\_final\_rebuild\_24459.log}、
+\code{results/r8\_baseline\_final\_smoke\_24461.log} 和
+\code{results/r8\_baseline\_final\_smoke\_24461.json}。
+
+\begin{record}{R8 结论}
+R8 的阳性成果是建立了完整 output exactness 的筛选框架，并确认 fused
+output-add 可以保持原有 BF16 语义；但它没有带来稳定加速。R7 的 19--26\%
+仍然只能解释为 output materialization 的可消融成本，不能升级为完整
+FlashKDA 的 benchmark 胜利。5090 已确认目标架构为 SM120，但依赖构建阻塞
+尚未解除；恢复输出 exactness 后，B300 和 5090 仍应分别建立正式 baseline。
+\end{record}

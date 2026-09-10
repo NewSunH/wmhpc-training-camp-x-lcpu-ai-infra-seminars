@@ -26,6 +26,26 @@ def get_c1_state_only_args():
     return ["-DC1_K2_STATE_ONLY=1"] if is_flag_set("FLASH_KDA_C1_STATE_ONLY") else []
 
 
+def get_c1_output_stage_args():
+    """Optionally override the K2 output pipeline depth for R8 ablations."""
+    value = os.getenv("FLASH_KDA_C1_OUTPUT_STAGES")
+    if value is None:
+        return []
+    if value not in {"1", "2", "3"}:
+        raise ValueError("FLASH_KDA_C1_OUTPUT_STAGES must be 1, 2, or 3")
+    return [f"-DC1_K2_OUTPUT_STAGES={value}"]
+
+
+def get_c1_out_fp32_args():
+    """Enable the R8 output FP32-accumulation epilogue probe."""
+    return ["-DC1_K2_OUT_FP32_ACCUM=1"] if is_flag_set("FLASH_KDA_C1_OUT_FP32") else []
+
+
+def get_c1_fuse_out_add_args():
+    """Enable the R8 fused output conversion/add probe."""
+    return ["-DC1_K2_FUSE_OUT_ADD=1"] if is_flag_set("FLASH_KDA_C1_FUSE_OUT_ADD") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -92,6 +112,9 @@ ext_modules = [
                 *get_arch_flags(),
                 *get_c1_vsplit_args(),
                 *get_c1_state_only_args(),
+                *get_c1_output_stage_args(),
+                *get_c1_out_fp32_args(),
+                *get_c1_fuse_out_add_args(),
             ],
         },
     )

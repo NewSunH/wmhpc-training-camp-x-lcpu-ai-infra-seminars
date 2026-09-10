@@ -102,3 +102,53 @@ git；报告中的结论同时记录了关键计数和指标。
   的 T=1024,H=4 补充实验。BF16/FP32 state 的 output 相同；BF16 final state
   相对 FP32 的 max/mean abs 为 4.117889/0.798589，而 FP32 state 相对 FLA
   reference 为 3.915220e-3/9.14e-5，说明状态精度仍是独立的误差维度。
+
+## R8：完整 output epilogue 候选筛选
+
+- `r8_out1_t8192_h96.json`、`r8_out3_t8192_h96.json` 以及
+  `r8_out1_t16_h96_exact.json`、`r8_out3_t16_h96_exact.json`：B300 上
+  output pipeline stage=1/3 的消融；stage=1 比同源码 stage=2 control
+  慢约 6.1%，stage=3 的单次约 1.6% 优势不足以排除噪声。增强探针在
+  T=16,H=96 对两种 stage 均确认 output/state exact。
+- `r8_fp32out_t{16,8192}_h96*.json`：延后 BF16 rounding 的候选；T=16,H=96
+  有 44,748 个 output 元素不一致（最大绝对差 256），因此拒绝。
+- `r8_direct*.json`：fragment-to-global 直写的多次 CuTe layout 探针；最后
+  direct7 虽保持非零计数，仍有 190,924 个 output 元素错误。中间两次
+  UniversalCopy/layout 尝试的编译失败记录见
+  `r8_direct_compile_failures.txt`；直写分支已从主源码移除，避免保留
+  错误的 opt-in 路径。
+- `r8_fuseadd_t{16,8192}_h*.json`、`r8_ctrlfull_*.json`：融合第二个
+  output GEMM 的 BF16 转换与 add；split H=1/H=96 均 exact 且与 control
+  持平，但 default H=96 比 control 慢约 1.5%，未设为默认。
+- `r8_base{fuse,ctrl}_t8192_h96.json`：非 split default 路径的 fuse/control
+  配对结果；用于确认融合候选不会因旧 binary 或 split 开关造成误判。
+- `r8_default_smoke.json`：关闭全部 R8 开关、重建 `+baseline.r8` 后的
+  T=16,H=1 output/state exact smoke。
+- `r8_lowprio_baseline_b300.log`：低优先级 B300 H=96 基线复核；FlashKDA
+  1.7843 ms，no-state 1.7839 ms，FP32-state 1.7350 ms，chunk_kda
+  3.7064 ms，chunk_gated_delta 1.9965 ms。
+- `r8_lowprio_bench_h1_b300.log`：低优先级 B300 H=1 复核；FlashKDA BF16
+  state/no-state/FP32-state 为 1.2758/1.2759/1.2212 ms，两个 FLA 参考为
+  0.5300/0.4293 ms。
+- `r8_lowprio_varlen_h4_b300.log`：低优先级 B300 H=4 varlen 复核；不等长
+  分段 BF16/no-state/FP32-state 为 0.5267/0.5242/0.5185 ms，八段 1024
+  为 0.2139/0.2120/0.2177 ms。
+- `r8_baseline_rebuild_24445.log`、`r8_baseline_smoke_24448.log` 和
+  `r8_baseline_smoke_24448.json`：移除错误 direct probe 后，在 B300 GPU
+  节点重建 `flash-kda==0.0.1+baseline.r8` 并完成 T=16,H=1 默认
+  output/state exactness smoke。
+- `r8_baseline_final_rebuild_24459.log`、`r8_baseline_final_smoke_24461.log`
+  和 `r8_baseline_final_smoke_24461.json`：stage exactness 补测后再次恢复
+  baseline 的最终构建与 smoke；结果仍为 output/state exact。
+- `r8_5090_EVALUATION.md` 与 `r8_5090_existing_t8192_h{1,4,96}.json`：
+  5090 SM120 架构确认和现有扩展探针。H=96 旧扩展 state 不 exact；R7/R8
+  重建仍被远端 CUTLASS 子模块和 `Python.h` 依赖阻塞，不能宣称超过官方
+  5090 baseline。
+- `r8_5090_state2_*.json`、`r8_5090_state2_9928.log`：补齐 CUTLASS 后的
+  SM120 构建尝试；编译链通过，但 Python editable import 仍加载旧 full
+  binary，未形成可用的 state-only/full 对照。
+
+R8 的完整命令、编译开关、exactness 判据、失败尝试及 R9 计划见
+`C1_R8_EXECUTION_SECTION.tex`。`r7_state_only_probe.py` 同时扩展了
+`output_equal_reference`、digest、差分元素数和绝对误差字段，便于后续完整
+output 优化的自动筛选。

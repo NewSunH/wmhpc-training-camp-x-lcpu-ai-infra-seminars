@@ -1,0 +1,34 @@
+{
+  "H": 96,
+  "T": 16,
+  "output_different_elements": 44748,
+  "output_digest": "ade6bbdbb86d57b0005f7bf0805881e78f00f42a0c6627cb4f432544f1d1c0dc",
+  "output_equal_reference": false,
+  "output_max_abs_diff": 256.0,
+  "output_mean_abs_diff": 1.5455117225646973,
+  "output_nonzero_elements": 196608,
+  "reference_output_digest": "1bd9be12e3cdd353af0e2b3e71e1fc2404d19f9a97bbbcb35875da28ba049735",
+  "reference_state_digest": "6bce0b0a915d8ae9e0558d3449336999545500dee3359378409ea3cc792a046a",
+  "seed": 2027,
+  "state_digest": "6bce0b0a915d8ae9e0558d3449336999545500dee3359378409ea3cc792a046a",
+  "state_dtype": "bfloat16",
+  "state_equal_reference": true,
+  "timing": {
+    "max_ms": 0.04540799930691719,
+    "mean_ms": 0.04051200002431869,
+    "median_ms": 0.04064000025391579,
+    "min_ms": 0.03840000182390213,
+    "samples_ms": [
+      0.03840000182390213,
+      0.038975998759269714,
+      0.03932800143957138,
+      0.03939199820160866,
+      0.04022400081157684,
+      0.04064000025391579,
+      0.040832001715898514,
+      0.040863998234272,
+      0.04105599969625473,
+      0.04540799930691719
+    ]
+  }
+}

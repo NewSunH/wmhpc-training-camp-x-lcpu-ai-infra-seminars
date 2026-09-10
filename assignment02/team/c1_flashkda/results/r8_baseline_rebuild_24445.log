@@ -1,0 +1,8 @@
+Using Python 3.12.13 environment at: /home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv
+Resolved 1 package in 1.37s
+   Building flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 40.34s
+Uninstalled 1 package in 0.34ms
+Installed 1 package in 0.73ms
+ ~ flash-kda==0.0.1+baseline.r8 (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)

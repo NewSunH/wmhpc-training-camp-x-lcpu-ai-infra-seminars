@@ -1,0 +1,20 @@
+R8 direct fragment-to-global compile failures (B300, CUDA/CuTe)
+
+The following two opt-in probes were intentionally discarded before the final
+baseline restore.  The source was not retained; the corresponding successful
+but numerically wrong probes are r8_direct_t16_h96.json and
+r8_direct4/6/7_t16_h96.json.
+
+1. FLASH_KDA_C1_DIRECT_OUT=true, UniversalCopy-based global tiled copy
+   Result: nvcc compilation failed in CuTe with a CopyAtom rank-mismatch
+   diagnostic while composing the source fragment and global destination.
+
+2. FLASH_KDA_C1_DIRECT_OUT=true, flattened/idx2crd destination mapping
+   Result: nvcc compilation failed with the same CuTe rank-mismatch family of
+   diagnostics.  Replacing the destination with scalar gmem_dst(j) compiled,
+   but produced an incorrect output map (r8_direct4_t16_h96.json).
+
+The exact compiler diagnostics were emitted in the Slurm build stdout and were
+not used as benchmark evidence.  The final source does not expose
+FLASH_KDA_C1_DIRECT_OUT, because the mapping was not proven correct for the
+swizzled MMA fragment or for partial CHUNK tails.

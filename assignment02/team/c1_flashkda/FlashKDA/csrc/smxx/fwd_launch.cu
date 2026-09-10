@@ -2,6 +2,10 @@
 #include "fwd_kernel1.cuh"
 #include "fwd_kernel2.cuh"
 
+#ifndef C1_K2_OUTPUT_STAGES
+#define C1_K2_OUTPUT_STAGES 2
+#endif
+
 // ==================== launch_fwd ====================
 template <int D, bool HasStateIn, bool HasStateOut, bool StateFP32, bool IsVarlen>
 void launch_fwd(
@@ -27,7 +31,7 @@ void launch_fwd(
 ) {
     using BF16 = cutlass::bfloat16_t;
     constexpr int kInputStages = 3;
-    constexpr int kOutputStages = 2;
+    constexpr int kOutputStages = C1_K2_OUTPUT_STAGES;
     constexpr int CHUNK = 16;
 
     using K1L = K1Layouts<D, CHUNK>;

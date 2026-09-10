@@ -13,6 +13,19 @@
 #define C1_K2_STATE_ONLY 0
 #endif
 
+// R8 probe: keep the output accumulator in FP32 through both output GEMMs,
+// then round once to BF16 immediately before the shared-memory epilogue.
+// The default remains the R4/R7 ordering for exact rollback.
+#ifndef C1_K2_OUT_FP32_ACCUM
+#define C1_K2_OUT_FP32_ACCUM 0
+#endif
+
+// R8 probe: fuse conversion of the second output GEMM with the BF16 add.
+// This preserves the original "round GEMM term, then BF16 add" ordering.
+#ifndef C1_K2_FUSE_OUT_ADD
+#define C1_K2_FUSE_OUT_ADD 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -244,6 +257,8 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr int kComputeThreads = ValueSplit ? 64 : 128;
     static_assert(!ValueSplit || NumThreads == kComputeThreads + 2 * kWarpSize);
     constexpr bool kStateOnly = C1_K2_STATE_ONLY != 0;
+    constexpr bool kOutFp32Accum = C1_K2_OUT_FP32_ACCUM != 0;
+    constexpr bool kFuseOutAdd = C1_K2_FUSE_OUT_ADD != 0;
 
     // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
     constexpr uint32_t kValueTmaElements = ValueSplit
@@ -713,9 +728,11 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
             // ======== Phase 2: Cast out (keep in regs), load v/INV/beta ========
             SFragT out_bf16[2];
-            #pragma unroll
-            for (int i = 0; i < 2; ++i)
-                cute::transform(out_acc[i], out_bf16[i], [] __device__ (float x) { return BF16(x); });
+            if constexpr (!kOutFp32Accum) {
+                #pragma unroll
+                for (int i = 0; i < 2; ++i)
+                    cute::transform(out_acc[i], out_bf16[i], [] __device__ (float x) { return BF16(x); });
+            }
 
             SFragT v_bf16[2];
             #pragma unroll
@@ -785,12 +802,25 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                 b_dst[0] = u_b_regs[0]; b_dst[1] = u_b_regs[1];
                 b_dst[2] = u_b_regs[2]; b_dst[3] = u_b_regs[3];
 
-                clear(out_acc[i]);
-                gemm(thr_mma, tCrA_k(_,_,Int<0>{}), tCrB_u_arr[i](_,_,Int<0>{}), out_acc[i]);
+                if constexpr (kOutFp32Accum) {
+                    // The phase-1 q@s result is still in out_acc.  Let the
+                    // second GEMM accumulate into it, avoiding an early BF16
+                    // round and a separate BF16 add fragment.
+                    gemm(thr_mma, tCrA_k(_,_,Int<0>{}), tCrB_u_arr[i](_,_,Int<0>{}), out_acc[i]);
+                    cute::transform(out_acc[i], out_bf16[i], [] __device__ (float x) { return BF16(x); });
+                } else {
+                    clear(out_acc[i]);
+                    gemm(thr_mma, tCrA_k(_,_,Int<0>{}), tCrB_u_arr[i](_,_,Int<0>{}), out_acc[i]);
 
-                SFragT gemm_bf16;
-                cute::transform(out_acc[i], gemm_bf16, [] __device__ (float x) { return BF16(x); });
-                cute::transform(out_bf16[i], gemm_bf16, out_bf16[i], [] __device__ (BF16 c, BF16 a) { return c + a; });
+                    if constexpr (kFuseOutAdd) {
+                        cute::transform(out_bf16[i], out_acc[i], out_bf16[i],
+                            [] __device__ (BF16 c, float a) { return c + BF16(a); });
+                    } else {
+                        SFragT gemm_bf16;
+                        cute::transform(out_acc[i], gemm_bf16, [] __device__ (float x) { return BF16(x); });
+                        cute::transform(out_bf16[i], gemm_bf16, out_bf16[i], [] __device__ (BF16 c, BF16 a) { return c + a; });
+                    }
+                }
             }
 
             // ======== Phase 5: Store final out ========
