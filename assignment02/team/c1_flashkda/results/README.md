@@ -82,3 +82,23 @@ git；报告中的结论同时记录了关键计数和指标。
   direct 使 barrier stall 从 9.74% 降至 7.80%、long-scoreboard 从
   25.45% 降至 20.84%，但 Tensor/TMA/TMEM 指令数量不变，单次 NCU replay
   时间受噪声影响反而略高；该结果只用于规划 R7，不替代 CUDA-event 重复。
+- `r7_state_only_probe.py` 与 `r7_{stateonly,full}_t{16,8192}_h96.json`：
+  R7 真实 K2 state-only 消融。state-only 保留 recurrence/final-state，
+  关闭 output pipeline/store；有效对照的两个尺寸 final state 均与 reference
+  位级 exact，T=8192,H=96 从 2.004288 ms 降到 1.621376 ms（19.11%）。
+  `r7_stateonly_t16_h96.json` 是远端源码同步错误、实际加载 full binary 的
+  早期记录（output 非零），不用于结论；`r7_stateonly_t16_h96_v2.json`
+  是第一次正确关闭 output 但缺少 CTA-wide publication barrier 的失败，
+  `r7_stateonly_barrier_t16_h96.json` 才是修正后的 T=16,H=96 结果。
+- `r7_{stateonly,full}_t8192_h{1,4}.json`：门槛通过后的 H 扫描；H=1/H=4
+  仍 exact，state-only median 分别为 0.483520/0.495936 ms，full 为
+  0.655776/0.668160 ms，对应 26.27%/25.78% reduction。
+- `r7_{stateonly,full}_ncu_{pipe,mem}_*.log`：B300 NCU replay 原始 CSV。
+  pipe 对照显示 registers/thread 78->60、tensor-pipe 39936->26112、
+  TMA-pipe 19968->18240；dynamic smem 均为 68608 B。TMA output store
+  不表现为 SASS global-store 指令，故该计数器两边均为零，不能据此否定
+  output 写回已被消融；NCU 仅用于结构解释，正式延迟以 CUDA events 为准。
+- `r7_lowprio_state_precision_24316.log`：低优先级（Slurm `--nice=10000`）
+  的 T=1024,H=4 补充实验。BF16/FP32 state 的 output 相同；BF16 final state
+  相对 FP32 的 max/mean abs 为 4.117889/0.798589，而 FP32 state 相对 FLA
+  reference 为 3.915220e-3/9.14e-5，说明状态精度仍是独立的误差维度。

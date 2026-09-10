@@ -21,6 +21,11 @@ def get_c1_vsplit_args():
     return ["-DC1_VSPLIT_K2=1"] if is_flag_set("FLASH_KDA_C1_VSPLIT_K2") else []
 
 
+def get_c1_state_only_args():
+    """Build the R7 recurrence probe without K2 output materialization."""
+    return ["-DC1_K2_STATE_ONLY=1"] if is_flag_set("FLASH_KDA_C1_STATE_ONLY") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -86,6 +91,7 @@ ext_modules = [
                 *get_nvcc_thread_args(),
                 *get_arch_flags(),
                 *get_c1_vsplit_args(),
+                *get_c1_state_only_args(),
             ],
         },
     )

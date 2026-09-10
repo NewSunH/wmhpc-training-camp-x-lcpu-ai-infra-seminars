@@ -1,0 +1,197 @@
+\section{R7 执行记录：K2 state-only 消融}
+
+\subsection{实验问题与可检验假设}
+
+R6 的 direct epilogue 只作用于独立的 tcgen05 probe，不能回答完整 K2 中
+输出路径占用了多少时间。R7 因而直接在 R4 value-split K2 上做编译期消融：
+保留 Kernel 1、TMA 输入、K2 的 \(k@s\)、\(q@s\)、\(\mathrm{INV}@U\)、
+state recurrence、CTA 间的 value-split 映射以及 final-state TMA store，
+仅关闭 output shared-memory tile 的生产/消费和 output-store。该路径由
+\code{C1\_K2\_STATE\_ONLY} 控制，默认值为 0；未设置环境变量时生成的
+extension 与 R4 baseline 完全相同。
+
+这个消融的判定标准是：
+
+\begin{enumerate}
+  \item final state 必须逐元素等于 \code{tests/torch\_ref.py}；
+  \item state-only 的 \code{out} 必须保持为零，证明 output store 确实没有发生；
+  \item 两个 binary 必须使用同一输入、同一 B300 allocation 和同一 CUDA-event
+        配置；
+  \item 如果去掉 output materialization 后端到端延迟显著下降，才能把输出
+        pipeline/store 认定为主成本之一；不能把 NCU replay 时间当作正式延迟。
+\end{enumerate}
+
+\subsection{代码改动}
+
+改动集中在两个文件：
+
+\begin{itemize}
+  \item \code{FlashKDA/csrc/smxx/fwd\_kernel2.cuh} 顶部增加
+        \code{C1\_K2\_STATE\_ONLY} 默认宏。MMA warp 在 state-only 模式不再
+        调用 \code{producer\_acquire/producer\_commit}，Phase 5 不写 output
+        shared tile，STORE warp 不执行 output TMA/scalar loop；state update
+        和 final-state store 保留。
+  \item \code{FlashKDA/setup.py} 增加
+        \code{FLASH\_KDA\_C1\_STATE\_ONLY=1} 到 nvcc 的 opt-in 编译开关。
+        \code{FLASH\_KDA\_C1\_VSPLIT\_K2=1} 仍然单独控制 R4 split layout。
+\end{itemize}
+
+第一次试运行中只移除了 output wait，却没有补上 STORE warp 与 MMA warp
+之间的发布顺序。结果是 output 为零但 final state 不 exact：T=16,H=96
+的 state digest 为
+\code{422d0b73f7e94b2b387f4443ba93c994a40b9326a67a6153e455219a9cc0f481}，
+reference digest 为
+\code{6bce0b0a915d8ae9e0558d3449336999545500dee3359378409ea3cc792a046a}。
+原因是正常路径的 output-pipeline \code{consumer\_wait} 同时承担了延后
+final-state TMA 的作用。修正后在 state-only 分支末尾加入
+\code{\_\_syncthreads()}，让所有 CTA threads 在 final-state TMA 之前
+完成 state 写回；修正版本 job 24317 exact。
+
+\subsection{构建与运行命令}
+
+在 B300 远端目录中，两个 binary 使用完全相同的源码和显式 SM103 架构，
+只切换 state-only 环境变量：
+
+\begin{lstlisting}
+cd /home/lcpu/<user>/<repo>/assignment02/team/c1_flashkda/FlashKDA
+export PATH=/home/lcpu/<user>/<repo>/assignment02/.venv/bin:/usr/local/bin:/usr/bin:/bin
+export FLASH_KDA_CUDA_ARCHS=103a FLASH_KDA_C1_VSPLIT_K2=1 NVCC_THREADS=8
+export FLASH_KDA_C1_STATE_ONLY=1 FLASH_KDA_VERSION_SUFFIX=+r7.stateonly
+uv pip install --python /home/lcpu/<user>/<repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+
+# baseline 只把上面的开关改为 0，version suffix 改为 +r7.full
+export FLASH_KDA_C1_STATE_ONLY=0 FLASH_KDA_VERSION_SUFFIX=+r7.full
+uv pip install --python /home/lcpu/<user>/<repo>/assignment02/.venv/bin/python \
+  --no-build-isolation --no-deps --reinstall --editable .
+\end{lstlisting}
+
+探针 \code{challenge/r7\_state\_only\_probe.py} 对每个 case 使用固定 seed
+2027 生成 \(D=128\) 的 q/k/v/g/beta、初始 BF16 state，并执行一次
+reference exactness 和 CUDA-event timing。正式尺寸使用 warmup=10、event
+iters=50：
+
+\begin{lstlisting}
+python challenge/r7_state_only_probe.py --T 8192 --H 96 \
+  --warmup 10 --iters 50 --json results/r7_stateonly_t8192_h96.json
+python challenge/r7_state_only_probe.py --T 8192 --H 96 \
+  --warmup 10 --iters 50 --json results/r7_full_t8192_h96.json
+\end{lstlisting}
+
+两个版本分别在 Slurm job 24323 和 24325 中运行；小尺寸 T=16,H=96 的
+state-only、修正后的 state-only 和 full 对照为 jobs 24306、24317、24319。
+
+\subsection{Exactness 与端到端延迟}
+
+所有有效 state-only 结果的 \code{state\_equal\_reference} 均为 true，且
+state digest 与 full binary 相同。T=16,H=96 的 state-only output nonzero
+element 为 0；full 为 196581。目标尺寸结果如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r r}
+\toprule
+case & full median (ms) & state-only median (ms) & reduction & state exact \\
+\midrule
+T=16,H=96  & 0.041440 & 0.039968 & 3.55\%  & yes \\
+T=8192,H=96 & 2.004288 & 1.621376 & 19.11\% & yes \\
+\bottomrule
+\end{tabular}
+\caption{同一 B300、同一 seed 和 value-split binary 的 CUDA-event 对照。
+延迟 reduction 定义为 \(1-t_{\rm state}/t_{\rm full}\)。}
+\end{table}
+
+T=8192,H=96 的完整输出 buffer 有 100,659,413 个非零元素，而 state-only
+仍为 0；两者 final-state digest 均为
+\code{d83bda52e4e0a64ca1673a6f97758f9b3b023178a84261f253efbf75ff0aaac1}。
+因此这次对照不是“输出数值变了所以变快”，而是确认在保持 state 语义的
+前提下删除了 output materialization。
+
+在门槛通过后补做 H 扫描（T=8192、warmup=10、iters=30）。H=1 和 H=4
+同样 exact，且由于单次 output path 在总调用中占比更高，消融收益更明显：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+H & full median (ms) & state-only median (ms) & reduction \\
+\midrule
+1  & 0.655776 & 0.483520 & 26.27\% \\
+4  & 0.668160 & 0.495936 & 25.78\% \\
+96 & 2.004288 & 1.621376 & 19.11\% \\
+\bottomrule
+\end{tabular}
+\caption{T=8192 的 H 扫描；H=1/H=4 jobs 为 24357--24361，JSON 与 H=96
+结果一起保存在 \code{results/r7\_stateonly\_t8192\_h*.json} 和
+\code{results/r7\_full\_t8192\_h*.json}。}
+\end{table}
+
+\subsection{NCU 结构对照}
+
+NCU 使用同一套 metrics，在 T=16,H=96 仅 capture 一个 recurrence launch；
+replay 会改变时钟和 kernel time，故只用于结构解释。原始 CSV 风格日志为
+\code{results/r7\_stateonly\_ncu\_pipe\_24353.log} 和
+\code{results/r7\_full\_ncu\_pipe\_24354.log}。关键字段如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+metric & full & state-only & state-only/full \\
+\midrule
+registers/thread & 78 & 60 & 0.769 \\
+dynamic smem (B) & 68,608 & 68,608 & 1.000 \\
+tensor-pipe instructions & 39,936 & 26,112 & 0.654 \\
+TMA-pipe instructions & 19,968 & 18,240 & 0.914 \\
+TMEM-pipe instructions & 0 & 0 & -- \\
+global SASS stores & 0 & 0 & -- \\
+NCU kernel time (ns) & 10,688 & 10,016 & 0.937 \\
+barrier stall (\%) & 20.30 & 29.62 & 1.459 \\
+long-scoreboard stall (\%) & 26.32 & 29.47 & 1.120 \\
+wait stall (\%) & 9.00 & 7.20 & 0.800 \\
+\bottomrule
+\end{tabular}
+\caption{B300 NCU replay 的 recurrence 结构指标。TMA output store 不表现为
+SASS global-store 指令，因此 global SASS stores 为零不能解释为没有 output
+写回；TMA-pipe 指令和 event 对照共同证明 output path 已被消融。}
+\end{table}
+
+state-only 使寄存器从 78 降到 60（减少 23.1\%），tensor-pipe 指令减少
+34.6\%，TMA 指令减少 8.6\%。dynamic shared memory 没有变化，因为本轮
+保留了 output storage 的静态 union，目的是先隔离语义和时间成本，而不是
+声称已经完成 shared-memory 重排。NCU replay 中 barrier/long-scoreboard
+stall 反而上升，说明删除 output wait 后需要显式 CTA barrier，且剩余
+recurrence/TMA latency 的相对占比提高；这也是不能只看寄存器或 DRAM traffic
+就断言端到端瓶颈的直接证据。
+
+\subsection{R7 判定与后续}
+
+R7 的 state-only 消融通过 exactness，并在目标 H=96、T=8192 达到 19.1\%
+的完整调用降低，超过原先 10\% 的进入门槛。结论可以严格表述为：K2 的
+output materialization（包括 output MMA 结果的保留、pipeline 协调以及
+output TMA/scalar store）是当前端到端成本的重要组成部分；R6 中“寄存器和
+global read 已优化但速度仍受其他部分拖慢”的方向是对的，但不能把它缩减成
+单一 DRAM latency 解释。
+
+这仍不是可直接合入生产的 patch：state-only 没有产生 output，且保留了
+未使用的 output shared-memory allocation。下一轮优先级为：
+
+\begin{enumerate}
+  \item 把已经验证的 output-only 消融改造成真正的 output epilogue 优化，
+        在不牺牲 output exactness 的前提下减少中间 fragment 和 pipeline
+        barrier；
+  \item 对 H=1、H=4、H=96 及 T=16/64/8192 做同一套 full/state-only
+        扫描，确认 19.1\% 是否依赖大 head 数；
+  \item 只有新 epilogue 在完整输出语义下仍达到稳定收益，才考虑进一步
+        重排 shared storage；默认 baseline 和 R4 split 开关继续保持可回滚。
+\end{enumerate}
+
+\begin{record}{R7 结论}
+R7 用真实 K2 recurrence 完成了“保留 state、去掉 output materialization”
+的受控消融。T=8192,H=96 在 B300 上从 2.004288 ms 降到 1.621376 ms，
+final state 位级 exact，NCU 显示寄存器和 tensor/TMA 工作量同步下降。因而
+可以确认 output 路径是主要拖慢因素之一；但 state-only 本身不是最终答案，
+下一轮必须恢复 output exactness 后再做生产化 epilogue。\end{record}

@@ -6,6 +6,13 @@
 
 #include "utils.cuh"
 
+// R7 probe: keep the recurrence/state update intact while disabling the
+// output materialization path.  This is intentionally opt-in at compile time
+// so the production kernel and its Python API remain unchanged.
+#ifndef C1_K2_STATE_ONLY
+#define C1_K2_STATE_ONLY 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -236,6 +243,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     // maps two CTAs to disjoint 64-column value slices of a head.
     constexpr int kComputeThreads = ValueSplit ? 64 : 128;
     static_assert(!ValueSplit || NumThreads == kComputeThreads + 2 * kWarpSize);
+    constexpr bool kStateOnly = C1_K2_STATE_ONLY != 0;
 
     // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
     constexpr uint32_t kValueTmaElements = ValueSplit
@@ -559,10 +567,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
         for (int t = 0; t < t_tiles; ++t) {
 #ifndef TMA_DISABLE_ALL
-            store_pipeline.producer_acquire(out_write);
+            if constexpr (!kStateOnly) {
+                store_pipeline.producer_acquire(out_write);
+            }
             load_pipeline.consumer_wait(load_read);
             int load_stage = load_read.index();
-            int out_stage = out_write.index();
+            int out_stage = kStateOnly ? 0 : out_write.index();
 #else
             constexpr int load_stage = 0;
             constexpr int out_stage = 0;
@@ -784,10 +794,15 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             }
 
             // ======== Phase 5: Store final out ========
-            #pragma unroll
-            for (int i = 0; i < 2; ++i) {
-                Tensor out_block = local_tile(out_tile, make_shape(Int<16>{}, Int<16>{}), make_coord(0, value_block_base + warp_id * 2 + i));
-                copy(smem_tiled_store_C, smem_thr_store_C.retile_S(out_bf16[i]), smem_thr_store_C.partition_D(out_block));
+            // R7 state-only probe: phases 1--4 still execute exactly as in
+            // K2, but no output tile is written to shared memory and no STORE
+            // warp output transaction is issued.  State update remains below.
+            if constexpr (!kStateOnly) {
+                #pragma unroll
+                for (int i = 0; i < 2; ++i) {
+                    Tensor out_block = local_tile(out_tile, make_shape(Int<16>{}, Int<16>{}), make_coord(0, value_block_base + warp_id * 2 + i));
+                    copy(smem_tiled_store_C, smem_thr_store_C.retile_S(out_bf16[i]), smem_thr_store_C.partition_D(out_block));
+                }
             }
 
             // ======== Phase 6: s_acc update ========
@@ -868,18 +883,30 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
 #ifndef TMA_DISABLE_ALL
             cutlass::arch::fence_view_async_shared();
-            store_pipeline.producer_commit(out_write);
+            if constexpr (!kStateOnly) {
+                store_pipeline.producer_commit(out_write);
+            }
             load_pipeline.consumer_release(load_read);
             ++load_read;
-            ++out_write;
+            if constexpr (!kStateOnly) {
+                ++out_write;
+            }
 #endif
         }
+    }
+
+    // In the normal path the STORE warp's output-pipeline wait naturally
+    // keeps its final-state TMA store behind the MMA warps.  The R7 probe
+    // removes that output wait, so provide the equivalent CTA-wide ordering
+    // before the STORE warp can publish state_acc.
+    if constexpr (kStateOnly) {
+        __syncthreads();
     }
 
 #ifndef TMA_DISABLE_ALL
     if (warp_role == WarpRole::STORE && lane_predicate) {
         StorePipelineState out_read;
-        for (int t = 0; t < t_tiles; ++t) {
+        if constexpr (!kStateOnly) for (int t = 0; t < t_tiles; ++t) {
             store_pipeline.consumer_wait(out_read);
             int stage = out_read.index();
             int actual_len = min(CHUNK, seq_len - t * CHUNK);

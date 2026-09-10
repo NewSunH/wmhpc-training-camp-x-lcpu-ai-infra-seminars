@@ -1,0 +1,7 @@
+shape=[1,1024,4,128] seed=0
+bf16_state vs fp32_state output: max_abs=0.000000e+00 mean_abs=0.000000e+00 max_rel=0.000000e+00
+bf16_state vs fp32_state final: max_abs=4.117889e+00 mean_abs=7.985893e-01 max_rel=2.078126e+06
+bf16_state vs FLA output: max_abs=1.137695e-01 mean_abs=2.713594e-03 max_rel=1.000000e+00
+fp32_state vs FLA output: max_abs=1.137695e-01 mean_abs=2.713594e-03 max_rel=1.000000e+00
+bf16_state vs FLA final: max_abs=4.117846e+00 mean_abs=7.985905e-01 max_rel=2.078126e+06
+fp32_state vs FLA final: max_abs=3.915220e-03 mean_abs=9.135994e-05 max_rel=9.991322e+01
