@@ -1,0 +1,16 @@
+Using Python 3.12.13 environment at: <B300_REPO>/assignment02/.venv
+error: The build backend returned an error
+  Caused by: Call to `setuptools.build_meta:__legacy__.prepare_metadata_for_build_editable` failed (exit status: 1)
+
+    [stderr]
+    W0909 12:13:01.886000 855636 torch/utils/cpp_extension.py:178] No CUDA runtime is found, using CUDA_HOME='/usr/local/cuda'
+    fatal: not a git repository (or any parent up to mount point /)
+    Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+    Traceback (most recent call last):
+      File "<string>", line 14, in <module>
+      File "<B300_REPO>/assignment02/.venv/lib/python3.12/site-packages/setuptools/build_meta.py", line 486, in prepare_metadata_for_build_editable
+        return self.prepare_metadata_for_build_wheel(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "<string>", line 87, in <module>
+      File "<string>", line 44, in get_arch_flags
+    RuntimeError: FLASH_KDA_CUDA_ARCHS=auto requires a visible CUDA device. Set FLASH_KDA_CUDA_ARCHS=all to build all supported archs.

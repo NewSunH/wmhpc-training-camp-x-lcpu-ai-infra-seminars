@@ -36,3 +36,20 @@ git；报告中的结论同时记录了关键计数和指标。
   30/200/5 fixed H96 event benchmark（job 23501 和 23504）；split prototype 在
   三个 state 变体均慢于 baseline。vsplit_baseline_build_b300.log 记录了 job
   23502 关闭编译开关后的基线重建，远程绝对路径已替换为占位符。
+- `vsplit_sliced_build_{no_gpu_,}b300.log`：第四轮两次构建记录。job 23564
+  未显式申请 GPU，故 `FLASH_KDA_CUDA_ARCHS=auto` 无法探测架构；job 23566
+  在 `--gres=gpu:1` 下成功安装 `0.0.1+c1r4slice`。远程绝对路径已替换为
+  `<B300_REPO>`。
+- `vsplit_sliced_{,extended_}smoke_b300.json`：第四轮 job 23567 的位级
+  exactness。前者复跑五个 R3 state 分支；后者额外覆盖 H96 的 97-token
+  fixed sequence、两个 varlen 形状和两个 `B=2` batched 形状，所有 output/final
+  state difference 均为零。
+- `vsplit_sliced_ncu_summary_b300.csv`：第四轮 job 23569 的 six recurrence
+  captures。block=128、grid-y=192，dynamic shared memory 为 68,608 B；相较 R3
+  的 98,432 B 减少 29,824 B（30.3%）。
+- `vsplit_sliced_bench_h96_b300.log`：第四轮 job 23570 的官方 fixed H96
+  `30/200/5` CUDA-event benchmark。sliced prototype 比 R3 baseline 明显改善，
+  但三种 state 变体仍未达到 baseline。
+- `vsplit_sliced_baseline_build_b300.log`：第四轮 job 23571 的 GPU-backed
+  baseline restore，关闭 `FLASH_KDA_C1_VSPLIT_K2` 后安装
+  `0.0.1+baseline.r4`；远程绝对路径已替换为 `<B300_REPO>`。

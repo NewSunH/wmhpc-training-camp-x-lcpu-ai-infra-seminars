@@ -1,0 +1,7 @@
+profile_id,block_size,grid_size_y,registers_per_thread,dynamic_smem_bytes,active_warps_pct
+0,128,192,78,68608,8.45
+1,128,192,78,68608,8.45
+2,128,192,78,68608,8.47
+3,128,192,78,68608,8.47
+4,128,192,82,68608,8.59
+5,128,192,82,68608,8.58

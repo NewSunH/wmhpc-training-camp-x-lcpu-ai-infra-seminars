@@ -1,0 +1,9 @@
+Using Python 3.12.13 environment at: <B300_REPO>/assignment02/.venv
+Resolved 1 package in 1.21s
+   Building flash-kda @ file://<B300_REPO>/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file://<B300_REPO>/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 40.82s
+Uninstalled 1 package in 0.34ms
+Installed 1 package in 0.67ms
+ - flash-kda==0.0.1+baseline.r3 (from file://<B300_REPO>/assignment02/team/c1_flashkda/FlashKDA)
+ + flash-kda==0.0.1+c1r4slice (from file://<B300_REPO>/assignment02/team/c1_flashkda/FlashKDA)

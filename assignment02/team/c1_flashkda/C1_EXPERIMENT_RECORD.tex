@@ -1377,4 +1377,304 @@ load/store，并缩小 state/input shared-memory footprint；在此之前不应�
 prototype 作为提交版本或答辩中的性能方案。
 \end{record}
 
+\subsection{R4：分片 TMA 与紧凑 shared memory}
+
+\subsubsection{目标和接受标准}
+
+R3 的两个 CTA 原型已证明 value-row 分工在数值上成立，但仍为每个 CTA 保留
+完整的 \(V\)、output 和 recurrent state，并在完整 tile 上使用单线程标量写回。
+这种实现只增加了并行度，没有减少数据搬运，因而 H=96 基准仍显著变慢。R4 将
+分片边界推进到 TMA descriptor 和 shared-memory 类型层：每个 CTA 只保存
+自己的 64 个 value 列，完整 tile 使用 TMA 写回，只有序列尾部的部分 tile 保留
+受限标量路径。
+
+本轮的性能接受标准设为：
+
+\begin{enumerate}
+\item fixed \(T=8192,H=96,D=128\) 的 output 与 final state 在 BF16/FP32、state
+      in/out 组合下均与 \code{torch\_ref} 逐元素 \code{torch.equal}；同时覆盖
+      首次跨 chunk、varlen 和 \(B>1\) batched 坐标路径。
+\item NCU 中 K2 应保持 block=128、grid-y=\(2H\)，且 dynamic shared memory
+      相对 R3 的 98,432 B 明显下降。
+\item 官方 benchmark 的 BF16 state-in/out 均值应不高于同一 B300 基线
+      1.7561 ms。若仍变慢，则只记录为可复现的优化失败，不替换默认路径。
+\end{enumerate}
+
+\subsubsection{布局设计}
+
+\code{K2Layouts<D,CHUNK>} 新增四类分片布局。对本题 \(D=128,CHUNK=16\)，
+它们的逻辑形状如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l l l}
+\toprule
+对象 & R3/full layout & R4 split layout \\
+\midrule
+V 和 output & \(16\times128\) BF16 & \(16\times64\) BF16 \\
+recurrent state & \(128\times128\) BF16 & \(64\times128\) BF16 \\
+FP32 state conversion buffer & \(128\times128\) FP32 & \(64\times128\) FP32 \\
+CTA grid-y & \(H\) & \(2H\) \\
+MMA warps / CTA & 4 & 2 \\
+threads / CTA（含 LOAD、STORE warp）& 192 & 128 \\
+\bottomrule
+\end{tabular}
+\caption{R4 分片布局与线程映射。每个 split CTA 的第二个 grid 坐标
+\code{value\_slice\_idx=blockIdx.y\&1}，对应全局 value 列区间
+\([64s,64(s+1)]\)。}
+\end{table}
+
+\paragraph{计算坐标。}shared memory 中的 state、V 和 output 都是 CTA-local
+的 64 列视图，因此 MMA 的 tile 坐标重新从 0 开始；两个 MMA warp 分别处理
+local value block (0,1) 和 (2,3)。K dimension 仍为完整 128，因而
+\(K\times S\) reduction、\(q\times S\) output accumulation 和 state update
+的数学顺序没有改变。TMA global tile 的起始地址才加上
+\(64\,\code{value\_slice\_idx}\)，从而两个 CTA 写入不重叠。
+
+\paragraph{输入 V。}新增的 \code{TMAValueSliceVOLayout} 由同一个
+\code{GMMA::Layout\_K\_INTER\_Atom} 生成 \(16\times64\) descriptor。LOAD warp
+在 split 分支中建立形状为 \(1\times16\times64\) 的 global view，目标为
+\code{ValueSliceVOLayout}；baseline 分支仍使用原来的 \(1\times16\times128\)
+descriptor。K1 workspace、beta 和 (K/Q) 中间量在本轮不切分，因为它们的
+reduction 维度仍被两个 CTA 完整消费。
+
+\paragraph{state。}新增 \code{TMAValueSliceStateSmemLayout} 和 FP32 对应布局，
+其 global view 为 \(1\times64\times128\)，起始 row 为
+\(64\,\code{value\_slice\_idx}\)。\code{SharedStorageK2<...,true>} 的
+\code{state\_acc}、每个 pipeline stage 的 V 和 output 均采用 compact array。
+FP32 state conversion helper 从原来的固定 \(D\times D\) 改成模板参数
+\(\code{Rows}\times\code{Cols}\)，因此 split 路径只转换 \(64\times128\) 元素。
+没有 state-in 时，zero initialization 的计数同样使用 compact layout。
+
+\paragraph{写回。}完整 \(16\times64\) output tile 现在由
+\code{tma\_store\_out\_slice} 写回，完整 64x128 state tile 由
+\code{tma\_store\_final\_state\_slice} 写回，完整 \(64\times128\) state tile 同样使用 TMA。\(T\) 不能被 TMA descriptor 动态
+缩短，所以最后一个不足 16 行的 tile 仍由 STORE warp 单线程遍历有效行和 64
+列；该路径只处理 tail，不再承担正常 tile 的写回。每个 TMA output store
+后调用 \code{tma\_store\_arrive/wait}，再释放 output pipeline stage，避免
+下一次复用 shared-memory buffer 时存在异步写竞争。
+
+\subsubsection{代码和构建记录}
+
+源码改动集中在 \code{csrc/smxx/fwd\_kernel2.cuh}、
+\code{csrc/smxx/fwd\_launch.cu} 和 \code{csrc/smxx/utils.cuh}；新增
+\code{challenge/vsplit\_native\_extended\_smoke.py}。\code{setup.py} 的
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2} 仍为 opt-in，默认值为关闭。R4 实现检查点
+为提交 \code{9bcb146}，先推送后同步到 B300。
+
+本地同步使用的命令为：
+
+\begin{lstlisting}
+scp assignment02/team/c1_flashkda/FlashKDA/csrc/smxx/fwd_kernel2.cuh \\
+    assignment02/team/c1_flashkda/FlashKDA/csrc/smxx/fwd_launch.cu \\
+    assignment02/team/c1_flashkda/FlashKDA/csrc/smxx/utils.cuh \\
+    infrab300:$C1_FLASH/csrc/smxx/
+\end{lstlisting}
+
+其中 \code{C1\_FLASH} 展开为
+\code{/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1\_flashkda/FlashKDA}。
+远端源码不是 git checkout，因此每次同步后以文件 SHA-256 和本地检查点核对。
+
+第一次提交构建命令漏掉了 GPU request：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+sbatch --parsable --output=$C1_DIR/results/_r4_build-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/bin:/usr/bin:/bin; \\
+  export FLASH_KDA_C1_VSPLIT_K2=1 FLASH_KDA_VERSION_SUFFIX=+c1r4slice \\
+         NVCC_THREADS=8; \\
+  uv pip install --python $C1_PY --no-build-isolation --no-deps \\
+     --reinstall --editable .'
+\end{lstlisting}
+
+job 23564 分配了 CPU 但没有 \\code{gres/gpu}，因此 setup.py 的
+\code{FLASH\_KDA\_CUDA\_ARCHS=auto} 无法探测设备，在 metadata 阶段以 exit 2
+退出。对应日志保存在 \code{results/vsplit\_sliced\_build\_no\_gpu\_b300.log}。
+该失败确认了构建必须发生在 GPU allocation 内，而非 CUDA 编译器本身的错误。
+
+修正后的命令显式请求一张 GPU：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+sbatch --parsable --gres=gpu:1 --cpus-per-task=8 \\
+  --output=$C1_DIR/results/_r4_build-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/bin:/usr/bin:/bin; \\
+  export FLASH_KDA_C1_VSPLIT_K2=1 FLASH_KDA_VERSION_SUFFIX=+c1r4slice \\
+         NVCC_THREADS=8; \\
+  /usr/local/bin/uv pip install --python $C1_PY --no-build-isolation \\
+         --no-deps --reinstall --editable .'
+\end{lstlisting}
+
+job 23566 成功完成 CUDA 编译和 editable install：
+\code{flash-kda==0.0.1+c1r4slice}。构建日志为
+\code{results/vsplit\_sliced\_build\_b300.log}。此前 R3 中的 venv 没有
+\code{pip} executable，本轮继续使用 \code{/usr/local/bin/uv pip}；构建环境
+变量和路径均在日志中固定。
+
+\subsubsection{exactness 验证}
+
+job 23567 在同一张 B300 GPU 上连续执行 focused 和 extended smoke：
+
+\begin{lstlisting}
+cd "$C1_DIR"
+sbatch --parsable --gres=gpu:1 --cpus-per-task=4 \\
+  --output=$C1_DIR/results/_r4_smoke-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin; \\
+  $C1_PY challenge/vsplit_native_smoke.py \\
+      --json results/_r4_native_smoke.json; \\
+  $C1_PY challenge/vsplit_native_extended_smoke.py \\
+      --json results/_r4_extended_smoke.json'
+\end{lstlisting}
+
+focused 脚本复跑 R3 的五个 case：\(T=16,H=96\) BF16 state in/out，\(T=17,H=1\)
+FP32 state in/out，\(T=64,H=1\) no-state，以及 state-in-only 和 state-out-only。
+所有 output 和 final state 的 difference 均为 0。extended 脚本进一步使用
+seed=20260909 覆盖：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l c c c c}
+\toprule
+case & state & output diff & state diff & exact \\
+\midrule
+fixed \(T=97,H=96\) & BF16 in/out & 0 & 0 & 是 \\
+varlen [17,33,65],H=4 & BF16 in/out & 0 & 0 & 是 \\
+varlen [16,17],H=96 & FP32 out-only & 0 & 0 & 是 \\
+batched \(B=2,T=17,H=4\) & BF16 in/out & 0 & 0 & 是 \\
+batched \(B=2,T=64,H=4\) & FP32 in/out & 0 & 0 & 是 \\
+\bottomrule
+\end{tabular}
+\caption{R4 job 23567 extended exactness。JSON 原始结果为
+\code{results/vsplit\_sliced\_extended\_smoke\_b300.json}；focused 结果为
+\code{results/vsplit\_sliced\_smoke\_b300.json}。}
+\end{table}
+
+这些 case 同时检查了 local value slice 的四个全局坐标来源：固定长度的
+head/sequence stride、跨 chunk 的 state continuation、varlen 的
+\code{cu\_seqlens} 和 batched 自动生成的 sequence prefix。FP32 输入转换和
+FP32 输出转换均通过，表明 64x128 conversion buffer 与 TMA slice
+layout 的 row/column 对应关系正确。
+
+\subsubsection{NCU 资源结果}
+
+job 23569 的 profiling command 如下；只筛选 recurrence kernel，warmup、
+measured iteration 和 repeat 均为 1，计时不用于性能比较：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+sbatch --parsable --gres=gpu:1 --cpus-per-task=4 \\
+  --output=$C1_DIR/results/_r4_ncu_job-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin; \\
+  ncu --target-processes application-only --csv --page details \\
+    -k "regex:_flash_kda_fwd_recurrence" \\
+    --metrics launch__block_size,launch__grid_size,\\
+launch__shared_mem_per_block_dynamic,launch__registers_per_thread,\\
+sm__warps_active.avg.pct_of_peak_sustained_active \\
+    $C1_PY benchmarks/bench_fwd.py --mode fixed --H 96 \\
+    --warmup 0 --iters 1 --repeats 1 > $C1_DIR/results/_r4_ncu.csv 2>&1'
+\end{lstlisting}
+
+六次 recurrence capture 的提取结果为：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{c c c c c c}
+\toprule
+profile IDs & block & grid-y & registers/thread & dynamic smem & active warps \\
+\midrule
+0--1 & 128 & 192 & 78 & 68,608 B & 8.45\% \\
+2--3 & 128 & 192 & 78 & 68,608 B & 8.47\% \\
+4--5 & 128 & 192 & 82 & 68,608 B & 8.58--8.59\% \\
+\bottomrule
+\end{tabular}
+\caption{R4 job 23569 NCU details；完整轻量表为
+\code{results/vsplit\_sliced\_ncu\_summary\_b300.csv}。}
+\end{table}
+
+相对 R3 的 98,432 B，R4 dynamic shared memory 减少
+\(98{,}432-68{,}608=29{,}824\) B，即约 \(30.3\%\)。这与 layout 变化一致：
+state、三 stage V 和两 stage output 均按列宽减半；K1 workspace 和 K/Q
+intermediate 仍保持完整。block/grid 验证了两个 CTA 的 launch，register/thread
+从 R3 的 70--72 增加到 78 或 82，说明 compact layout 没有自动带来寄存器下降。
+active-warp 指标略升至 8.45--8.59\%，但受 grid 覆盖和 profiler 影响，不能仅由
+该指标推断端到端收益。
+
+\subsubsection{官方 benchmark 和性能门槛}
+
+job 23570 使用与 R3 完全相同的 fixed case 和 CUDA event 参数：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+sbatch --parsable --gres=gpu:1 --cpus-per-task=4 \\
+  --output=$C1_DIR/results/_r4_bench-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin; \\
+  $C1_PY benchmarks/bench_fwd.py --mode fixed --H 96 \\
+      --warmup 30 --iters 200 --repeats 5'
+\end{lstlisting}
+
+结果和 R3 同环境 baseline 如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r r}
+\toprule
+state variant & R3 baseline (ms) & R4 sliced (ms) & ratio & difference \\
+\midrule
+BF16 state-in/out & 1.7561 & 1.9959 & \(1.1366\times\) & +13.66\% \\
+no state & 1.7637 & 1.9977 & \(1.1327\times\) & +13.27\% \\
+FP32 state-in/out & 1.7135 & 2.0296 & \(1.1845\times\) & +18.45\% \\
+\bottomrule
+\end{tabular}
+\caption{B300 fixed \([8192,96,128]\)，均为 warmup=30、iters=200、repeats=5 的
+CUDA event mean。R4 原始日志为 \code{results/vsplit\_sliced\_bench\_h96\_b300.log}；
+R3 baseline 原始日志为 \code{results/vsplit\_baseline\_bench\_h96\_b300.log}。}
+\end{table}
+
+与 R3 的 scalar-store/full-state 原型相比，BF16 state 时间从 5.5842 ms 降到
+1.9959 ms，降幅约 64.3\%；no-state 从 2.9064 ms 降到 1.9977 ms，降幅约
+31.3\%。因此分片 TMA 和 compact shared memory 确实消除了上一版的主要结构性
+开销，但当前两个 CTA 仍比已验证 baseline 慢 13--18\%。本轮没有把剩余差距
+归因于单一指令：可能因素包括两个 CTA 对 K1 workspace 和完整 K/Q reduction
+的重复消费、split descriptor/warp specialization 的额外控制以及更高寄存器
+压力；需要进一步的 kernel-level counters 才能分离它们。
+
+\subsubsection{恢复默认环境和 R4 结论}
+
+性能测试结束后，使用同样的 GPU-backed build 关闭编译开关，job 23571 将 B300
+环境恢复为默认路径：
+
+\begin{lstlisting}
+cd "$C1_FLASH"
+sbatch --parsable --gres=gpu:1 --cpus-per-task=8 \\
+  --output=$C1_DIR/results/_r4_baseline_build-%j.log \\
+  --wrap='export PATH=$C1_A2/.venv/bin:/usr/local/bin:/usr/bin:/bin; \\
+  export FLASH_KDA_C1_VSPLIT_K2=0 FLASH_KDA_VERSION_SUFFIX=+baseline.r4 \\
+         NVCC_THREADS=8; \\
+  /usr/local/bin/uv pip install --python $C1_PY --no-build-isolation \\
+         --no-deps --reinstall --editable .'
+\end{lstlisting}
+
+job 23571 成功安装 \code{flash-kda==0.0.1+baseline.r4}，其日志为
+\code{results/vsplit\_sliced\_baseline\_build\_b300.log}。源码中的 opt-in
+开关仍保持关闭，因此后续普通 benchmark 不会意外运行实验分支。
+
+\begin{record}{R4 结论}
+R4 完成了分片 TMA 的可执行实现：每个 CTA 使用 \(16\times64\) V/output 和
+\(64\times128\) state，完整 tile 不再标量写回；动态 shared memory 从
+98,432 B 降至 68,608 B。focused 和 extended exactness 共覆盖 fixed、跨
+chunk、varlen、batched、BF16/FP32 及 state in/out 分支，全部 output/final
+state 逐元素 exact。故本轮满足正确性和资源重构目标。
+
+性能目标仍未满足：官方 BF16 state-in/out 为 1.9959 ms，较 baseline
+1.7561 ms 慢 \(1.1366\times\)。因此 R4 代码继续作为 opt-in 实验分支，默认安装
+已恢复 baseline；不能把“shared memory 减少 30.3\%”等同于端到端加速。下一轮
+应围绕剩余 13--18\% 差距做 kernel counter 分解和 CTA 级并发验证；若无法在
+保持 exact 的同时达到 baseline，则停止继续扩大 split 代码面，保留 baseline
+作为作业提交版本。
+\end{record}
+
 \end{document}
