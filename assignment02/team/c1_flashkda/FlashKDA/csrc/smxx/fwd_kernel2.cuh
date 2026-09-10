@@ -962,6 +962,8 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                 }
                 __syncthreads();
 
+                Tensor INV_fp16 = make_tensor(
+                    make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].INV.begin())), LMLayout{});
                 for (int inv_pass = 0; inv_pass < 2; ++inv_pass) {
                     int inv_tid = compute_tid + inv_pass * kComputeThreads;
                     const int col_block_size = 8;
@@ -975,11 +977,9 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     }
                     if (i < j) Mqk(i, j) = BF16::bitcast(0);
                     FP16 x = L_fp16(i, j);
-                    INV(i, j) = (i == j ? FP16(1.0f) - x : -x);
+                    INV_fp16(i, j) = (i == j ? FP16(1.0f) - x : -x);
                 }
                 __syncthreads();
-                Tensor INV_fp16 = make_tensor(
-                    make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].INV.begin())), LMLayout{});
                 // The helper is warp-specialized and owns one 16x16 tile;
                 // its own guard limits work to the first 32 threads.
                 if (compute_tid < 32) {
