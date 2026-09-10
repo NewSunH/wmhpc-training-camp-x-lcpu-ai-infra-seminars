@@ -46,6 +46,16 @@ def get_c1_fuse_out_add_args():
     return ["-DC1_K2_FUSE_OUT_ADD=1"] if is_flag_set("FLASH_KDA_C1_FUSE_OUT_ADD") else []
 
 
+def get_c1_direct_output_args():
+    """Enable the R10 scalar direct-global-output probe."""
+    return ["-DC1_K2_DIRECT_OUTPUT=1"] if is_flag_set("FLASH_KDA_C1_DIRECT_OUTPUT") else []
+
+
+def get_c1_direct_output_vec_args():
+    """Enable the R10 pair-packed direct-global-output probe."""
+    return ["-DC1_K2_DIRECT_OUTPUT_VEC=1"] if is_flag_set("FLASH_KDA_C1_DIRECT_OUTPUT_VEC") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -115,6 +125,8 @@ ext_modules = [
                 *get_c1_output_stage_args(),
                 *get_c1_out_fp32_args(),
                 *get_c1_fuse_out_add_args(),
+                *get_c1_direct_output_args(),
+                *get_c1_direct_output_vec_args(),
             ],
         },
     )

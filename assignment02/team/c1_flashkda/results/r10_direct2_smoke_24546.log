@@ -1,0 +1,67 @@
+srun: job 24547 queued and waiting for resources
+srun: job 24547 has been allocated resources
+{
+  "cases": [
+    {
+      "H": 96,
+      "T": 16,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "t16_h96_bf16_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "t17_h1_fp32_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "float32",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 64,
+      "has_state_in": false,
+      "has_state_out": false,
+      "name": "t64_h1_bf16_no_state",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": true,
+      "has_state_out": false,
+      "name": "t17_h1_bf16_in_only",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": false,
+      "has_state_out": true,
+      "name": "t17_h1_fp32_out_only",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "float32",
+      "state_exact": true
+    }
+  ],
+  "seed": 20260910
+}

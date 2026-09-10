@@ -1,0 +1,12 @@
+srun: job 24566 queued and waiting for resources
+srun: job 24566 has been allocated resources
+==WARNING== No metrics to collect found in sections.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 4085469 (/home/lcpu/10578328/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/bin/python3.12)
+shape=[8192,96,128] warmup=0 iters=5 repeats=1
+  flash_kda (bf16 state) : mean=11.8151 ms, min=11.5855 ms, max=12.4232 ms
+  flash_kda (no state)   : mean=11.5388 ms, min=11.5223 ms, max=11.5734 ms
+  flash_kda (fp32 state) : mean=11.5151 ms, min=11.4793 ms, max=11.5740 ms
+  chunk_kda : mean=3.6961 ms, min=3.6021 ms, max=4.0574 ms
+  chunk_gated_delta_rule : mean=2.0528 ms, min=1.9727 ms, max=2.3490 ms
+==PROF== Disconnected from process 4085469

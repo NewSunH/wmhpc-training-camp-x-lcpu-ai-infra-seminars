@@ -1,0 +1,8 @@
+srun: job 24552 queued and waiting for resources
+srun: job 24552 has been allocated resources
+shape=[8192,96,128] warmup=20 iters=100 repeats=5
+  flash_kda (bf16 state) : mean=2.0291 ms, min=1.9931 ms, max=2.0918 ms
+  flash_kda (no state)   : mean=2.0280 ms, min=2.0099 ms, max=2.0781 ms
+  flash_kda (fp32 state) : mean=2.0505 ms, min=2.0342 ms, max=2.0833 ms
+  chunk_kda : mean=3.6352 ms, min=3.6141 ms, max=4.0182 ms
+  chunk_gated_delta_rule : mean=1.9965 ms, min=1.9779 ms, max=2.1728 ms

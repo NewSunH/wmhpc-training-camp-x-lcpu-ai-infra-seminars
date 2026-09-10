@@ -1,0 +1,14 @@
+srun: job 24565 queued and waiting for resources
+srun: job 24565 has been allocated resources
+varlen shape=[8192,96,128] seq_lens=[1300, 547, 2048, 963, 271, 3063] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=1.4910 ms, min=1.4257 ms, max=1.5784 ms
+  flash_kda (no state)   : mean=1.4974 ms, min=1.4033 ms, max=1.5744 ms
+  flash_kda (fp32 state) : mean=1.5093 ms, min=1.4033 ms, max=1.5958 ms
+  chunk_kda : mean=3.6968 ms, min=3.6816 ms, max=3.8362 ms
+  chunk_gated_delta_rule : mean=1.9762 ms, min=1.9624 ms, max=2.0498 ms
+varlen shape=[8192,96,128] seq_lens=[1024, 1024, 1024, 1024, 1024, 1024, 1024, 1024] warmup=10 iters=50 repeats=3
+  flash_kda (bf16 state) : mean=1.2140 ms, min=1.2097 ms, max=1.2264 ms
+  flash_kda (no state)   : mean=1.2096 ms, min=1.2056 ms, max=1.2309 ms
+  flash_kda (fp32 state) : mean=1.2345 ms, min=1.2301 ms, max=1.2457 ms
+  chunk_kda : mean=3.5991 ms, min=3.5844 ms, max=3.7097 ms
+  chunk_gated_delta_rule : mean=1.8802 ms, min=1.8722 ms, max=1.9697 ms

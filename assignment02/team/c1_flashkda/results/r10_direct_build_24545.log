@@ -1,0 +1,10 @@
+srun: job 24544 queued and waiting for resources
+srun: job 24544 has been allocated resources
+Resolved 1 package in 1.31s
+   Building flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 37.55s
+Uninstalled 1 package in 0.39ms
+Installed 1 package in 0.70ms
+ - flash-kda==0.0.1+r10.vsplitbase (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)
+ + flash-kda==0.0.1+r10.direct2 (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)

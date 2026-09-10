@@ -172,3 +172,50 @@ R9 证明 R8 direct 失败来自 K_INTER/SM90 STSM swizzle 与 row-major global
 layout 不同构，而不是 recurrence 数值误差或 pipeline race；同时得到一个
 可执行的显式 lane/fragment→row/column 公式。R10 需要把公式改造成低寄存器
 实际写回，再用真实 K2 的 output/state exactness 和 CUDA events 评估收益。
+
+## R10：真实 K2 显式 direct-output 写回
+
+- `r10_direct_build_24545.log`：修正远端同步路径后，B300/SM103a 上启用
+  `FLASH_KDA_C1_VSPLIT_K2=1`、`FLASH_KDA_C1_DIRECT_OUTPUT=1` 的真实 K2
+  构建。此前 job 24534--24543 把头文件放在 `FlashKDA/` 根目录，实际编译
+  仍使用旧的 `csrc/smxx/fwd_kernel2.cuh`；那些 direct/control benchmark
+  只记录为无效尝试，不用于性能结论。
+- `r10_direct2_smoke_24546.{log,json}`：修正路径后的 scalar 显式
+  fragment→global 基础 exactness；5 个 state I/O 组合的 output 和 final state
+  difference 均为零。
+- `r10_scalar_ext_build_24584.log`、`r10_scalar_ext_24585.log`：scalar direct
+  的扩展 exactness 补测，覆盖跨 chunk、varlen、`B=2`、BF16/FP32 state；5 个
+  case 的 output 和 final state difference 均为零。
+- `r10_direct2_bench_fixed_h96_b300_24547.log`：scalar V-split direct 在
+  `[8192,96,128]` 上为 BF16/no-state/FP32 `2.1088/2.0659/2.0762 ms`。
+- `r10_vsplit_base2_build_24549.log`、`r10_vsplit_base2_bench_fixed_h96_b300_24550.log`：
+  同源码 V-split control 为 `2.0291/2.0280/2.0505 ms`，scalar direct 未能
+  减少端到端延迟。
+- `r10_vec_build_24551.log`、`r10_vec_{smoke,extended}_*.{log,json}`：将每个
+  fragment 的四个相邻 BF16 pair 打包为 32-bit global store。所有 exactness
+  矩阵仍为零差分。
+- `r10_vec_bench_fixed_h96_b300_24558.log`：V-split pair-packed direct 为
+  `1.1744/1.1591/1.1553 ms`，相对 V-split control 约减少 42.1%；但 V-split
+  control 本身不是当前最佳路径。
+- `r10_full_directvec_build_24560.log`、`r10_full_directvec_{smoke,extended}_*.{log,json}`：
+  将同一显式 map 用于 non-split 四个 MMA warp，基础/扩展 exactness 仍通过。
+- `r10_full_directvec_bench_fixed_h96_b300_24564.log` 和
+  `r10_full_directvec_bench_varlen_h96_b300_24565.log`：non-split
+  pair-packed direct 的 fixed BF16/no-state/FP32 为 `1.6779/1.7037/1.6529 ms`；
+  两个 varlen case 的 BF16-state 为 `1.4910/1.2140 ms`，均未超过默认路径。
+- `r10_base_build_24541.log`、`r10_base_bench_fixed_h96_b300_24542.log`：同一
+  B300 环境的 non-split default 对照为 `1.0285/1.0285/0.9979 ms`。
+- `r10_full_directvec_ncu_basic_24567.csv`、`r10_full_base_ncu_basic_24569.csv`：
+  NCU basic set 的 resource 对照。default 为 66--74 registers/thread，
+  direct 为 78--92；两者 shared-memory configuration 均为 200,704 B/block，
+  achieved occupancy 均约 9.37%。direct 的 DRAM throughput 略高，不能支持
+  “减少 TMA 就降低内存压力”的假设；NCU replay 时间不作为正式 benchmark。
+- `r10_direct_extended_24537.json`、`r10_direct_build_24540.log`、
+  `r10_direct_bench_fixed_h96_b300_24539.log` 等早期文件保留 UV 构建和错误
+  同步路径，便于审计；正式结果只采用修正路径的 `24545` 之后文件。
+
+R10 将 R9 的映射从诊断 kernel 接入真实 K2 并完成 scalar/vector 两个写回版本。
+pair-packed direct 对 V-split 有明显局部收益，但 non-split default 仍快约
+14.2%，且 direct path 增加寄存器、没有减少 shared-memory 配置。因此两个宏
+均保持 opt-in，不进入默认构建；后续优化应转向 output storage/epilogue
+结构或 launch/TMA 固定开销，而不是继续增加普通 global-store 地址计算。

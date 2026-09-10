@@ -1,0 +1,237 @@
+\section{R10 执行记录：显式 fragment 映射的真实 K2 写回}
+
+\subsection{实验目标与边界}
+
+R9 已经在最小 kernel 中证明了 K2 的 K\_INTER/\code{SM90\_U32x4\_STSM\_N}
+映射不能直接套用到 row-major global tile，同时给出了逐元素 exact 的逆映射。
+R10 将该公式接入真实 \FlashKDA K2 recurrence。实验只在 B300/SM103a 上进行，
+所有新路径均为编译期 opt-in，默认构建仍然使用原有 output shared-memory/TMA
+epilogue。
+
+本轮分为三个阶段：先验证 scalar direct global store 的完整正确性，再把相邻
+BF16 元素打包为 32-bit store，最后和同一源码的 V-split control 及默认四个
+MMA warp 路径比较 CUDA-event 延迟与 NCU resource 指标。实验成功的判据是
+output、final state 在所有覆盖形状上逐 bit exact；性能只有在正确性通过后才
+用于决策。
+
+\subsection{生产 kernel 的 opt-in 修改}
+
+\paragraph{编译开关。}
+
+\code{FlashKDA/setup.py} 新增两个环境变量到 NVCC 定义：
+
+\begin{itemize}
+  \item \code{FLASH\_KDA\_C1\_DIRECT\_OUTPUT} 定义
+        \code{C1\_K2\_DIRECT\_OUTPUT=1}，启用 scalar 显式写回；
+  \item \code{FLASH\_KDA\_C1\_DIRECT\_OUTPUT\_VEC} 定义
+        \code{C1\_K2\_DIRECT\_OUTPUT\_VEC=1}，启用相邻 BF16 pair 的
+        32-bit 打包写回。
+\end{itemize}
+
+两个宏默认都是零，因此未设置环境变量的构建不会改变已有二进制语义。
+\code{C1\_K2\_DIRECT\_OUTPUT\_VEC} 只有在 direct output 已经打开时才有
+实际作用。
+
+\paragraph{scalar direct path。}
+
+在 MMA warp 完成 Phase 4 的 \code{out\_bf16[i]} 后，不再把 fragment 写入
+shared output tile，而是按 R9 公式计算每个元素的全局坐标。设
+\(j\) 是经 \code{smem\_thr\_store\_C.retile\_S} 后的 fragment index，
+则：
+
+\begin{lstlisting}
+row       = (lane / 4) + (((j / 2) & 1) * 8)
+local_col = ((j / 4) * 8) + ((lane & 3) * 2) + (j & 1)
+tile_col  = (warp * 2 + block) * 16 + local_col
+col       = value_slice * (D / 2) + tile_col  // ValueSplit
+col       = tile_col                         // non-split
+\end{lstlisting}
+
+对每个实际 token 使用 \code{row < actual\_len} 谓词；全局线性地址为
+\code{(bos + t * CHUNK + row) * H * D + head\_idx * D + col}。ValueSplit
+时两个 CTA 分别负责不相交的 64 列，因此不会发生 CTA 间写冲突。
+
+direct path 同时跳过 output producer/consumer pipeline 和 STORE warp 的
+output TMA transaction。state update 仍由 MMA warp 执行；在最终 state store
+前增加 CTA-wide \code{\_\_syncthreads()}，替代原来由 output pipeline wait
+提供的发布顺序。partial tail 不写入下一 tile 的邻居区域。
+
+\paragraph{pair-packed path。}
+
+一个 fragment 的 8 个元素恰好形成四个连续 BF16 pair：\(j=\{0,1\}\)、
+\(\{2,3\}\)、\(\{4,5\}\)、\(\{6,7\}\)。R10-C 读取两个元素的 raw
+BF16 storage，组成
+
+\begin{lstlisting}
+packed = uint32_t(src(c0).storage) |
+         (uint32_t(src(c1).storage) << 16);
+*reinterpret_cast<uint32_t*>(out_raw_ptr + global_base + col) = packed;
+\end{lstlisting}
+
+每个 pair 的起始列是偶数，且 K2 的 head/value-slice 基址按 4-byte 对齐，
+所以该版本不改变 BF16 bit pattern，只把四次 16-bit store 降为四次 32-bit
+store。scalar 版本保留在同一开关下，作为地址和边界谓词的对照。
+
+\subsection{构建过程与一次无效实验}
+
+远端工作副本为
+\code{/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars}。
+第一次 job 24533 使用 UV 隔离构建，失败原因是临时 build environment 找不到
+PyTorch：
+
+\begin{lstlisting}
+ModuleNotFoundError: No module named 'torch'
+\end{lstlisting}
+
+后续统一使用 \code{uv pip install --reinstall --no-build-isolation -e}，并在
+GPU allocation 内设置 \code{FLASH\_KDA\_CUDA\_ARCHS=103a}。随后发现第一次
+同步把头文件放到了 \code{FlashKDA/fwd\_kernel2.cuh}，而 setuptools 实际
+编译的是 \code{FlashKDA/csrc/smxx/fwd\_kernel2.cuh}。因此 job 24534--24543
+期间的 direct/control 构建实际使用旧源码；对应的 1.16 ms benchmark 只说明
+两个 binary 相同，不能用于判断 R10 优化，日志仍保留在
+\code{r10\_direct\_build\_24540.log}、\code{r10\_direct\_bench\_fixed\_h96\_b300\_24539.log}
+等文件中。
+
+修正同步目标后，实际构建命令为：
+
+\begin{lstlisting}
+cd /home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=32 \\
+  bash -lc 'FLASH_KDA_C1_VSPLIT_K2=1 \\
+    FLASH_KDA_C1_DIRECT_OUTPUT=1 \\
+    FLASH_KDA_CUDA_ARCHS=103a \\
+    FLASH_KDA_VERSION_SUFFIX=+r10.direct2 \\
+    uv pip install --reinstall --no-build-isolation \\
+    -e team/c1_flashkda/FlashKDA'
+\end{lstlisting}
+
+pair-packed 版本额外设置
+\code{FLASH\_KDA\_C1\_DIRECT\_OUTPUT\_VEC=1}；默认对照清除
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2}、\code{FLASH\_KDA\_C1\_DIRECT\_OUTPUT}
+和 \code{FLASH\_KDA\_C1\_DIRECT\_OUTPUT\_VEC}。成功构建日志包括
+\code{r10\_direct\_build\_24545.log}、\code{r10\_vec\_build\_24551.log}、
+\code{r10\_full\_directvec\_build\_24560.log} 和
+\code{r10\_ncu\_base\_build\_24568.log}。
+
+\subsection{R10-A：scalar direct output 正确性}
+
+基础 probe \code{vsplit\_native\_smoke.py} 覆盖 5 个 state I/O 组合；扩展
+probe 额外覆盖固定长度跨 chunk、varlen、\(B=2\)、BF16/FP32 state。V-split
+和 non-split 两种编译形态都得到相同结果：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r r}
+\toprule
+variant & basic cases & extended cases & output mismatch & state mismatch \\
+\midrule
+V-split scalar & 5 & 5 & 0 & 0 \\
+non-split scalar/vector build & 5 & 5 & 0 & 0 \\
+\bottomrule
+\end{tabular}
+\caption{R10 direct path 的 exactness 汇总。每个 case 均同时检查 output 和适用的 final state。}
+\end{table}
+
+代表性结果来自 job 24546 的 scalar smoke、job 24585 的 scalar extended smoke
+以及 job 24557/24563 的 pair-packed 扩展 smoke：\(T=16,H=96\)、\(T=97,H=96\)、varlen
+\([17,33,65]\)、\(B=2,T=17,H=4\)、\(B=2,T=64,H=4\) 均为
+\code{output\_different=0}、\code{state\_different=0}。这说明显式映射、
+tail 谓词、ValueSplit 列偏移和 state publication barrier 在完整 K2 中均能
+保持 reference 的 BF16 bit pattern；没有只针对 R9 诊断值成立的假 exactness。
+
+\subsection{R10-C：B300 性能对照}
+
+所有正式 event benchmark 使用 warmup=20、iterations=100、repeats=5，
+输入为固定 \([8192,96,128]\)。下表只比较同一源码、同一节点上确认过编译宏
+的结果；job 24539--24544 的错误同步结果不纳入。
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+variant & BF16 state (ms) & no state (ms) & FP32 state (ms) \\
+\midrule
+V-split control & 2.0291 & 2.0280 & 2.0505 \\
+V-split scalar direct & 2.1088 & 2.0659 & 2.0762 \\
+V-split pair-packed direct & 1.1744 & 1.1591 & 1.1553 \\
+non-split default & 1.0285 & 1.0285 & 0.9979 \\
+non-split pair-packed direct & 1.6779 & 1.7037 & 1.6529 \\
+\bottomrule
+\end{tabular}
+\caption{B300 R10 fixed H96 CUDA-event benchmark。}
+\end{table}
+
+scalar direct 相对 V-split control 慢约 \(3.9\%\)，说明显式整数地址计算和
+逐元素 store 的成本超过了省下的 output pipeline。pair-packed 将 V-split
+延迟降到 \(1.1744\) ms，相对 V-split control 减少约 \(42.1\%\)，证明
+“减少输出写回阶段”在两个 CTA 的 split 路径上确实有效。但 V-split control
+本身不是当前最佳路径；pair-packed direct 仍比非 split default 的
+\(1.0285\) ms 慢约 \(14.2\%\)。将同一 map 用于四个 MMA warp 的 non-split
+kernel 后反而为 \(1.6779\) ms，比 default 慢约 \(63.1\%\)。
+
+varlen 的 non-split pair-packed 结果也没有反转结论：job 24565 在
+\code{[1300,547,2048,963,271,3063]} 和八段 1024 的输入上分别得到
+BF16-state \(1.4910\) ms 和 \(1.2140\) ms。它们均 exact，但没有超过
+现有 default/官方路径的相同形状记录。
+
+\subsection{资源分析：direct store 没有减少寄存器或 shared memory}
+
+对 non-split default 和 pair-packed direct 分别运行 NCU basic set。NCU
+replay 时间不作为性能数据，只读取 Launch Statistics、Occupancy 和
+DRAM throughput：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r r}
+\toprule
+variant & block & registers/thread & shared config (B) & achieved occupancy \\
+\midrule
+default & 192 & 66--74 & 200704 & 9.36--9.38\% \\
+pair-packed direct & 192 & 78--92 & 200704 & 9.37--9.38\% \\
+\bottomrule
+\end{tabular}
+\caption{NCU basic set 的 recurrence resource 结果；范围来自不同 state I/O 实例化。}
+\end{table}
+
+direct 版本的寄存器数不是下降，而是增加约 5--26 registers/thread；shared
+memory 配置完全没有变化，因为本轮没有删除 union 中预留的 output storage。
+两个版本的 occupancy 几乎相同。direct capture 的 DRAM throughput 约为
+11.3--11.9\%，default 约为 10.8--11.4\%，没有显示出“少一次 TMA 就显著
+降低内存压力”的证据，反而说明普通 global store 和地址计算增加了活动。
+对应原始 CSV 为
+\code{r10\_full\_directvec\_ncu\_basic\_24567.csv} 和
+\code{r10\_full\_base\_ncu\_basic\_24569.csv}。
+
+\subsection{R10 判定}
+
+本轮完成了 R10-A 的生产集成和 R10-C 的 pair-packed 尝试，但没有产生可替换
+当前默认路径的端到端优化：
+
+\begin{itemize}
+  \item 正确性：scalar 和 pair-packed 在 V-split/non-split、固定长度、
+        varlen、tail、batch、BF16/FP32 state 上均 exact；
+  \item split 局部收益：pair-packed direct 比 V-split control 快约
+        \(42.1\%\)，证明 R9 显式 map 不是纯诊断产物；
+  \item 端到端目标：当前最佳 non-split default 为 \(1.0285\) ms，
+        pair-packed non-split 为 \(1.6779\) ms，未超过 baseline；
+  \item 资源解释：direct path 增加寄存器、保留相同 shared-memory 配置，
+        因而没有形成预期的 occupancy/resource 优势。
+\end{itemize}
+
+因此 \code{C1\_K2\_DIRECT\_OUTPUT} 和
+\code{C1\_K2\_DIRECT\_OUTPUT\_VEC} 均保持 opt-in，不进入默认构建。
+R10 的 direct-store 主线到此停止继续堆叠普通 global-store 变体。下一轮应
+转向删除 output storage 的实际 shared-memory 占用、重新设计 warp-specialized
+epilogue，或分析 launch/TMA 固定开销；若不能同时保持当前 non-split 的
+低寄存器路径，继续增加显式地址计算只会扩大代码和寄存器压力。
+
+\begin{record}{R10 结论}
+R10 证明了 R9 显式输出映射可以安全接入真实 K2：两个编译形态和完整
+exactness 矩阵均通过。pair-packed 映射显著改善了 V-split control，但
+non-split default 仍快 \(14.2\%\)，且 NCU 显示 direct path 寄存器更多、
+shared memory 不变。故本轮的有效成果是“可复用的 exact direct epilogue
+和清晰的负性能结论”，不是默认 kernel 加速；默认环境保持不变。
+\end{record}

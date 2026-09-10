@@ -26,6 +26,20 @@
 #define C1_K2_FUSE_OUT_ADD 0
 #endif
 
+// R10 probe: write the final BF16 output fragment directly to global memory
+// using the lane/fragment inverse map established by the R9 standalone
+// oracle.  The default remains the shared-memory + TMA output pipeline.
+#ifndef C1_K2_DIRECT_OUTPUT
+#define C1_K2_DIRECT_OUTPUT 0
+#endif
+
+// R10-C probe: pack each adjacent BF16 pair from the explicit map into one
+// 32-bit global transaction.  This is opt-in and only valid for the same
+// 16x16 fragment shape proven by the scalar R10-A path.
+#ifndef C1_K2_DIRECT_OUTPUT_VEC
+#define C1_K2_DIRECT_OUTPUT_VEC 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -259,6 +273,8 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr bool kStateOnly = C1_K2_STATE_ONLY != 0;
     constexpr bool kOutFp32Accum = C1_K2_OUT_FP32_ACCUM != 0;
     constexpr bool kFuseOutAdd = C1_K2_FUSE_OUT_ADD != 0;
+    constexpr bool kDirectOutput = C1_K2_DIRECT_OUTPUT != 0;
+    constexpr bool kDirectOutputVec = C1_K2_DIRECT_OUTPUT_VEC != 0;
 
     // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
     constexpr uint32_t kValueTmaElements = ValueSplit
@@ -582,12 +598,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
         for (int t = 0; t < t_tiles; ++t) {
 #ifndef TMA_DISABLE_ALL
-            if constexpr (!kStateOnly) {
+            if constexpr (!kStateOnly && !kDirectOutput) {
                 store_pipeline.producer_acquire(out_write);
             }
             load_pipeline.consumer_wait(load_read);
             int load_stage = load_read.index();
-            int out_stage = kStateOnly ? 0 : out_write.index();
+            int out_stage = (kStateOnly || kDirectOutput) ? 0 : out_write.index();
 #else
             constexpr int load_stage = 0;
             constexpr int out_stage = 0;
@@ -828,10 +844,61 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             // K2, but no output tile is written to shared memory and no STORE
             // warp output transaction is issued.  State update remains below.
             if constexpr (!kStateOnly) {
-                #pragma unroll
-                for (int i = 0; i < 2; ++i) {
-                    Tensor out_block = local_tile(out_tile, make_shape(Int<16>{}, Int<16>{}), make_coord(0, value_block_base + warp_id * 2 + i));
-                    copy(smem_tiled_store_C, smem_thr_store_C.retile_S(out_bf16[i]), smem_thr_store_C.partition_D(out_block));
+                if constexpr (kDirectOutput) {
+                    // R9 established the exact inverse of the K_INTER C-copy
+                    // map for each 16x16 block.  Keep this first production
+                    // version scalar: correctness and address ownership are
+                    // easier to inspect before attempting vectorized stores.
+                    const int actual_len = min(CHUNK, seq_len - t * CHUNK);
+                    #pragma unroll
+                    for (int i = 0; i < 2; ++i) {
+                        auto src = smem_thr_store_C.retile_S(out_bf16[i]);
+                        if constexpr (kDirectOutputVec) {
+                            // j={0,1}, {2,3}, {4,5}, {6,7} are four
+                            // contiguous BF16 pairs in the logical output.
+                            // Their row/column starts are always 4-byte
+                            // aligned for the K2 16x16 tile.
+                            #pragma unroll
+                            for (int pair = 0; pair < 4; ++pair) {
+                                const int j0 = pair * 2;
+                                const int j1 = j0 + 1;
+                                auto c0 = idx2crd(j0, shape(src));
+                                auto c1 = idx2crd(j1, shape(src));
+                                const uint32_t packed =
+                                    uint32_t(src(c0).storage) |
+                                    (uint32_t(src(c1).storage) << 16);
+                                const int row = (lane_id / 4) + (((j0 / 2) & 1) * 8);
+                                const int local_col = ((j0 / 4) * 8) + ((lane_id & 3) * 2);
+                                const int tile_col = (warp_id * 2 + i) * 16 + local_col;
+                                const int col = ValueSplit ? value_slice_idx * (D / 2) + tile_col : tile_col;
+                                if (row < actual_len) {
+                                    const int64_t global_base =
+                                        (bos + t * CHUNK + row) * H * D + head_idx * D;
+                                    *reinterpret_cast<uint32_t*>(out_raw_ptr + global_base + col) = packed;
+                                }
+                            }
+                        } else {
+                            #pragma unroll
+                            for (int j = 0; j < size(src); ++j) {
+                                auto src_coord = idx2crd(j, shape(src));
+                                const int row = (lane_id / 4) + (((j / 2) & 1) * 8);
+                                const int local_col = ((j / 4) * 8) + ((lane_id & 3) * 2) + (j & 1);
+                                const int tile_col = (warp_id * 2 + i) * 16 + local_col;
+                                const int col = ValueSplit ? value_slice_idx * (D / 2) + tile_col : tile_col;
+                                if (row < actual_len) {
+                                    const int64_t global_base =
+                                        (bos + t * CHUNK + row) * H * D + head_idx * D;
+                                    out_raw_ptr[global_base + col] = src(src_coord);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    #pragma unroll
+                    for (int i = 0; i < 2; ++i) {
+                        Tensor out_block = local_tile(out_tile, make_shape(Int<16>{}, Int<16>{}), make_coord(0, value_block_base + warp_id * 2 + i));
+                        copy(smem_tiled_store_C, smem_thr_store_C.retile_S(out_bf16[i]), smem_thr_store_C.partition_D(out_block));
+                    }
                 }
             }
 
@@ -913,12 +980,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
 #ifndef TMA_DISABLE_ALL
             cutlass::arch::fence_view_async_shared();
-            if constexpr (!kStateOnly) {
+            if constexpr (!kStateOnly && !kDirectOutput) {
                 store_pipeline.producer_commit(out_write);
             }
             load_pipeline.consumer_release(load_read);
             ++load_read;
-            if constexpr (!kStateOnly) {
+            if constexpr (!kStateOnly && !kDirectOutput) {
                 ++out_write;
             }
 #endif
@@ -929,14 +996,14 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     // keeps its final-state TMA store behind the MMA warps.  The R7 probe
     // removes that output wait, so provide the equivalent CTA-wide ordering
     // before the STORE warp can publish state_acc.
-    if constexpr (kStateOnly) {
+    if constexpr (kStateOnly || kDirectOutput) {
         __syncthreads();
     }
 
 #ifndef TMA_DISABLE_ALL
     if (warp_role == WarpRole::STORE && lane_predicate) {
         StorePipelineState out_read;
-        if constexpr (!kStateOnly) for (int t = 0; t < t_tiles; ++t) {
+        if constexpr (!kStateOnly && !kDirectOutput) for (int t = 0; t < t_tiles; ++t) {
             store_pipeline.consumer_wait(out_read);
             int stage = out_read.index();
             int actual_len = min(CHUNK, seq_len - t * CHUNK);

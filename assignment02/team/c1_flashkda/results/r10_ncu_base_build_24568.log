@@ -1,0 +1,10 @@
+srun: job 24576 queued and waiting for resources
+srun: job 24576 has been allocated resources
+Resolved 1 package in 1.52s
+   Building flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 42.69s
+Uninstalled 1 package in 0.40ms
+Installed 1 package in 0.69ms
+ - flash-kda==0.0.1+r10.directvec.full (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)
+ + flash-kda==0.0.1+r10.ncu.base (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)
