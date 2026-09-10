@@ -832,7 +832,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                         k_raw(my_row, my_col + i) = BF16(k_vals[i] * k_inv_norm);
                     }
                 }
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
 
                 // Fused gate activation + cumulative sum.  The raw gate
                 // buffer is overwritten with BF16 cumulative values, while
@@ -854,7 +854,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     }
                     g_total(col) = ex2_approx_ftz_f32(sum);
                 }
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
 
                 // Match K1's decay layout.  K2 has four MMA warps (128
                 // compute threads), so each thread performs two of K1's
@@ -948,7 +948,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                         }
                     }
                 }
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
 
                 // Form K1's L and Mqk, then run the same triangular inverse
                 // and Neumann-series routine.  L is a dedicated temporary;
@@ -960,7 +960,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                 if (compute_tid >= 32 && compute_tid < 64) {
                     mma_m16n16_bf16bf16bf16_1warp(qd_out, ki_out, Mqk, compute_tid - 32);
                 }
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
 
                 Tensor INV_fp16 = make_tensor(
                     make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].INV.begin())), LMLayout{});
@@ -979,14 +979,14 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     FP16 x = L_fp16(i, j);
                     INV_fp16(i, j) = (i == j ? FP16(1.0f) - x : -x);
                 }
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
                 // The helper is warp-specialized and owns one 16x16 tile;
                 // its own guard limits work to the first 32 threads.
                 if (compute_tid < 32) {
                     neumann_inv_fused_1warp(L_fp16, INV_fp16, INV, compute_tid);
                 }
                 cutlass::arch::fence_view_async_shared();
-                __syncthreads();
+                compute_barrier.arrive_and_wait();
             }
 
             Tensor s_acc = make_tensor(
