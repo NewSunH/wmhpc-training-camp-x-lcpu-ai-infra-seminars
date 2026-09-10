@@ -1,0 +1,9 @@
+{
+  "device": "infrab300 B300",
+  "job_id": 25001,
+  "source": "assignment02/team/c1_flashkda/results/r17_cluster_launch_smoke_b300.log",
+  "attr_no_error": true,
+  "plain_launch_no_error": true,
+  "cluster_group_launch_no_error": true,
+  "ok": true
+}

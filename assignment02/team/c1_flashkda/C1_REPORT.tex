@@ -73,8 +73,10 @@ SM80 MMA 形状；CHUNK=32/64 在当前下界下已经出现显著指数下溢�
 的最小 M tile 为 64/128，与原有 16\(\times\)16 K2 recurrence 不能局部替换。
 K2 的主要限制不是简单的 DRAM 带宽不足，而是 chunk 间状态依赖、CTA 组织、
 barrier/TMA 固定开销和较低的可用并行度。多种 output、V-split、direct-store、
-swizzled-TMA 和共享存储重构均保持了若干 exactness，但没有稳定超过官方
-baseline；R12 的两个完整 output 候选与 baseline 持平，差距约 0.2\%。因此
+swizzled-TMA 和共享存储重构均保持了若干 exactness；workspace 融合、DSM
+和 PDL 也分别通过了局部正确性门槛，但没有稳定超过官方 baseline；R12 的
+两个完整 output 候选与 baseline 持平，差距约 0.2\%，R15--R18 也未形成
+端到端收益。因此
 建议保留 SM80 通用路径，只有在准备同步重做 K2 分块、状态布局和同步协议时，
 才值得建立 SM100 专版。
 \end{abstract}
@@ -329,13 +331,18 @@ R12 & stage=3 复测 & 通过 & 1.0294 vs 1.0272 ms，慢约 0.2\%，稳定持�
 R12 & fused STSM→TMA epilogue & 通过 & 1.0287 vs 1.0272 ms，慢约 0.15\%，稳定持平\\
 R13 & CHUNK=32 common exponent shift probe & reference 表示可行 & 消除约 15\% zero/14\% inf，但未进入完整 kernel\\
 R14 & K1/K2 workspace recompute fusion & 编译通过，smoke 失败 & 五个 case 均出现 output mismatch，未进行性能宣称\\
+R15 & 仅消除 $g_{\mathrm{total}}$ workspace & 10 个 case exact & $T=8192,H=96$ 候选 2.3392 vs base 1.7516 ms，慢 33.6\%\\
+R16 & CHUNK=32 scaled-state reference & float64 两 chunk allclose & 数学等价；运行时缩放 microbench 0.7853 ms，未接入完整 kernel\\
+R17 & DSM/cluster V-split primitive & 20/20 exact & DSM 比 duplicate load 慢 13.8--23.1\%，不接入\\
+R18 & PDL 调度重叠 & standalone 5/5 exact；FlashKDA smoke 通过 & 合成 probe 快 8.1--47.0\%，但 FlashKDA fixed H96 仅 -0.034\%\\
 \bottomrule
 \caption{主要挑战路线的结果分类。}
 \end{longtable}
 
 严格按“完整 H=96、同源 baseline、差距不超过 5\%”统计，出现过三个近似
 思路：R8 fused add、R12 stage=3、R12 fused TMA。其中 R12 的两个结果经过
-同源复测，属于可重复的持平；没有一个候选形成可确认的超过 baseline 的收益。
+同源复测，属于可重复的持平；R15--R18 没有改变这一结论，没有一个候选
+形成可确认的超过 baseline 的收益。
 
 \section{两个高潜力结构方向的评估}
 
@@ -421,6 +428,59 @@ predicate 和 epilogue；任何一个环节出错都会表现为跨 chunk 的 si
 证明 SM100 仍有超过 10\% 的结构性空间，再以独立 branch 进行 tile/layout
 重构；R13/R14 的当前负结果反而说明这两条路线都需要新的 ABI/layout 和
 精度协议。在此之前，SM80 通用路径是更合理的 v1 选择。
+\end{decision}
+
+\section{公开资料与基线审计带来的修正}
+
+截至 2026-09-10 的公开资料没有找到与本题完全相同的 B300、
+\(T=8192,H=96,D=128\) CUDA-event 对照，但给出了清晰的设计趋势：
+
+\begin{itemize}
+  \item NVIDIA 的
+        \href{https://docs.nvidia.com/cuda/archive/13.0.0/blackwell-tuning-guide/index.html}{Blackwell
+        Tuning Guide} 强调并行化、合并对齐访问和 cluster occupancy；这与
+        R17 中 DSM 反而慢 13.8--23.1\% 的实测相符，说明硬件特性本身不是
+        性能保证。
+  \item
+        \href{https://github.com/Int21-AI/KDA-B200}{KDA-B200} 和
+        \href{https://github.com/inclusionAI/cuLA}{cuLA} 的公开实现都采用
+        Blackwell-native tcgen05/TMEM、shape specialization、persistent 或
+        reusable-workspace 路由。cuLA 的 SM100 fwd\_o 还把 chunk=64、
+        256 threads 和 persistent/non-persistent stage 作为显式设计参数。
+        这些结果证明 SM100 专版有潜力，但 B200/FLA/CUPTI 口径不能直接替代
+        本题 B300 baseline。
+  \item
+        \href{https://github.com/flashinfer-ai/flashinfer/pull/4765}{FlashInfer
+        的公开 Blackwell KDA specialization PR} 把生成式变体、prepared
+        launcher 和 B300 route/correctness 回归作为一等对象；其 B300 记录
+        为 23/23 JIT、158/158 generated-route、25/25 production-route，
+        output/state mismatch 为 0，但页面没有给出可沿用到本题的旧 revision
+        performance 数字。
+  \item 第三方
+        \href{https://www.hjcheng0602.cn/blog/flashattn_G4/}{B300
+        TMA+TCGen05 调优记录}反复观察到 pipeline 串行、TMEM/SMEM 读回和寄存器
+        压力会吞掉理论 tensor throughput；这与本题 R15 的重算代价、R17 的
+        DSM barrier 代价和 R18 的短 PDL overlap window 相互印证。
+\end{itemize}
+
+对本地 base 的源码审计则给出了更具体的解释：K1 是 256-thread、
+\code{launch\_bounds(...,8)} 的 token/head 并行 prepare，使用 shared-memory
+union 和六类 workspace；K2 是 CHUNK=16、输入 stage=3、输出 stage=2、
+192-thread、四 MMA warp 加两个 load/store warp 的 recurrence。H=96 时
+动态 shared memory 约 200,704 B，NCU 观测到约 66--74 registers/thread、
+约 9.37\% achieved occupancy。SM103 上仍使用 SM90 TMA descriptor 和 HMMA，
+是为了保持经过验证的 16\(\times\)16 Neumann/state/layout ABI，而不是遗漏
+了 Blackwell 编译目标。因而最可信的性能路径不是继续改一个 store 或把
+共享内存削小，而是独立重做 tcgen05/TMEM 的 tile、状态布局、流水线和
+shape dispatch。
+
+\begin{decision}{基于公开资料的工程判断}
+R15--R18 证明低风险的局部改动已经接近其收益上限：workspace 重算会退化，
+DSM primitive 会退化，PDL 合成 probe 的收益也无法传递到当前 K1/K2 临界
+路径。若目标是继续追求超过 baseline 5--10\%，下一步应建立独立的 SM103a
+Blackwell-native kernel，优先复用公开项目的 tcgen05/TMEM、persistent
+双路由和 reusable workspace 思路；若目标是完成 C1，当前 HMMA baseline
+加上这些负向证据已经足以回答“为什么官方没有直接换 tcgen05”。
 \end{decision}
 
 \section{结论}

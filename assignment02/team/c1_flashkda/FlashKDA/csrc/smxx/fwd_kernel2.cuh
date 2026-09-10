@@ -68,6 +68,15 @@
 #ifndef C1_K1_K2_FUSED_WS
 #define C1_K1_K2_FUSED_WS 0
 #endif
+#ifndef C1_K1_K2_PDL
+#define C1_K1_K2_PDL 0
+#endif
+#ifndef C1_K1_K2_FUSED_WS_DEBUG
+#define C1_K1_K2_FUSED_WS_DEBUG 0
+#endif
+#ifndef C1_K1_K2_FUSED_GTOTAL
+#define C1_K1_K2_FUSED_GTOTAL 0
+#endif
 
 template <int D, int CHUNK = 16>
 struct K2Layouts {
@@ -96,6 +105,8 @@ struct K2Layouts {
         LayoutRight{}
     ));
     using GTotalLayout = Layout<Shape<Int<D>>, Stride<Int<1>>>;
+    using RawGLayout = decltype(make_layout(
+        make_shape(Int<CHUNK>{}, Int<D>{}), LayoutRight{}));
     using LMLayout = decltype(tile_to_shape(
         GMMA::Layout_K_INTER_Atom<cute::bfloat16_t>{},
         make_shape(Int<CHUNK>{}, Int<CHUNK>{}),
@@ -210,6 +221,7 @@ struct SharedStorageK2 {
     using StateSmemLayout = typename Layouts::StateSmemLayout;
     using GTotalLayout = typename Layouts::GTotalLayout;
     using LMLayout = typename Layouts::LMLayout;
+    using RawGLayout = typename Layouts::RawGLayout;
     using MMALayout = typename Layouts::MMALayout;
     using ValueVOLayout = std::conditional_t<
         ValueSplit, typename Layouts::ValueSliceVOLayout, VOLayout>;
@@ -227,6 +239,12 @@ struct SharedStorageK2 {
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> q_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_restored;
+#if C1_K1_K2_FUSED_GTOTAL
+        // Raw BF16 gate tile used only to reconstruct the terminal gate
+        // factor.  It is deliberately separate from the workspace buffers:
+        // this keeps all other K1/K2 ABI and layouts unchanged.
+        alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<RawGLayout>> g_raw;
+#endif
 #if C1_K1_K2_FUSED_WS
         // K1's inverse-decay vector is needed only while forming L/Mqk.  It
         // is a full [CHUNK,D] tile, so it cannot fit in the 16x16 INV tile.
@@ -395,10 +413,15 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr bool kFusedTmaEpilogue = C1_K2_FUSED_TMA_EPILOGUE != 0;
     constexpr bool kTmaSwizzledOutput = (C1_K2_TMA_SWIZZLED_OUTPUT != 0) || kFusedTmaEpilogue;
     constexpr bool kFusedWorkspace = C1_K1_K2_FUSED_WS != 0;
+    constexpr bool kFusedGTotal = C1_K1_K2_FUSED_GTOTAL != 0;
+    static_assert(!(kFusedWorkspace && kFusedGTotal),
+                  "minimal g_total fusion is independent of full workspace fusion");
     static_assert(!kFusedWorkspace || !ValueSplit,
                   "K1/K2 fused workspace prototype currently supports full K2 only");
     static_assert(!(kTmaSwizzledOutput && kDirectOutput),
                   "R11/R12 swizzled TMA and R10 direct output are exclusive");
+    static_assert(!C1_K1_K2_PDL || !kFusedWorkspace,
+                  "PDL prototype requires the separated K1 workspace producer");
 
     // Transaction bytes: v + beta plus either six workspace intermediates or
     // the three raw K1 inputs used by the fused recompute path.
@@ -412,7 +435,8 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
         (kFusedWorkspace
             ? uint32_t(cute::cosize_v<MMALayout>) * uint32_t(sizeof(BF16)) * 3
             : uint32_t(cute::cosize_v<MMALayout>) * uint32_t(sizeof(BF16)) * 3 +
-              uint32_t(cute::cosize_v<GTotalLayout>) * uint32_t(sizeof(float)) +
+              (kFusedGTotal ? uint32_t(cute::cosize_v<QKLayout>) * uint32_t(sizeof(BF16))
+                            : uint32_t(cute::cosize_v<GTotalLayout>) * uint32_t(sizeof(float))) +
               uint32_t(cute::cosize_v<LMLayout>) * uint32_t(sizeof(BF16)) * 2) +
 #endif
         0u;
@@ -597,6 +621,13 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     }
 #endif
 
+#if C1_K1_K2_PDL
+    // Initial-state setup is independent of K1's workspace.  Wait before the
+    // first workspace TMA load; the producer's PDL trigger does not itself
+    // provide memory visibility.
+    cudaGridDependencySynchronize();
+#endif
+
 #ifndef TMA_DISABLE_ALL
     __syncthreads();
 
@@ -707,7 +738,20 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].k_restored.begin()), TMAVOLayout{});
                     cute::copy(tma_load_ws_kr.with(*tma_barrier), cta_ws_kr.partition_S(g_tile), cta_ws_kr.partition_D(s_tile));
                 }
-                // g_total
+                // g_total.  In the minimal R15 probe, replace the one
+                // workspace load with the original BF16 gate tile and
+                // reconstruct the terminal factor in the compute warp.
+#if C1_K1_K2_FUSED_GTOTAL
+                {
+                    auto g_off = g_gate.layout()(head_idx, int(bos) + t * CHUNK, 0);
+                    Tensor g_tile = make_tensor(g_gate.data() + g_off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_gate.layout())));
+                    Tensor s_tile = make_tensor(
+                        make_smem_ptr(shared_storage.input[stage].g_raw.begin()), TMAQKLayout{});
+                    cute::copy(tma_load_g.with(*tma_barrier),
+                               cta_tma_load_g.partition_S(g_tile), cta_tma_load_g.partition_D(s_tile));
+                }
+#else
                 {
                     auto off = g_ws_gt.layout()(ws_idx, 0);
                     Tensor g_tile = make_tensor(g_ws_gt.data() + off,
@@ -715,6 +759,7 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].g_total.begin()), TMAGTotalSmemLayout{});
                     cute::copy(tma_load_ws_gt.with(*tma_barrier), cta_ws_gt.partition_S(g_tile), cta_ws_gt.partition_D(s_tile));
                 }
+#endif
                 // INV
                 {
                     auto off = g_ws_inv.layout()(ws_idx, 0, 0);
@@ -777,6 +822,31 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             Tensor INV = make_tensor(make_smem_ptr(shared_storage.input[load_stage].INV.begin()), LMLayout{});
             Tensor Mqk = make_tensor(make_smem_ptr(shared_storage.input[load_stage].Mqk.begin()), LMLayout{});
 
+            if constexpr (kFusedGTotal) {
+                using RawGLayout = typename SharedStorageT::RawGLayout;
+                Tensor g_raw = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].g_raw.begin()), RawGLayout{});
+                if (compute_tid < D) {
+                    int col = compute_tid;
+                    float dt = dt_bias_ptr[head_idx * D + col];
+                    float sum = 0.0f;
+                    float a_log_exp = expf(A_log_ptr[head_idx]);
+                    int actual_len = min(CHUNK, seq_len - t * CHUNK);
+                    #pragma unroll
+                    for (int row = 0; row < CHUNK; ++row) {
+                        float g_val = 0.0f;
+                        if (row < actual_len) {
+                            g_val = bf16_to_f32(g_raw(row, col)) + dt;
+                            g_val = a_log_exp * g_val;
+                            g_val = gate_scale * sigmoid_tanh_approx_f32(g_val);
+                        }
+                        sum += g_val;
+                    }
+                    g_total(col) = ex2_approx_ftz_f32(sum);
+                }
+                compute_barrier.arrive_and_wait();
+            }
+
             if constexpr (kFusedWorkspace) {
                 // K1/K2 workspace fusion prototype.  The producer loaded raw
                 // q/k/g into the three full-size buffers that normally carry
@@ -836,7 +906,15 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                         k_raw(my_row, my_col + i) = BF16(k_vals[i] * k_inv_norm);
                     }
                 }
-                compute_barrier.arrive_and_wait();
+
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 raw q=%f k=%f g=%f v=%f beta=%f\\n",
+                           float(q_raw(0, 0)), float(k_raw(0, 0)),
+                           float(g_raw(0, 0)), float(v_tile(0, 0)),
+                           float(beta_tile(beta_smem_offset)));
+                }
+#endif
 
                 // Fused gate activation + cumulative sum.  The raw gate
                 // buffer is overwritten with BF16 cumulative values, while
@@ -859,6 +937,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     g_total(col) = ex2_approx_ftz_f32(sum);
                 }
                 compute_barrier.arrive_and_wait();
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 gate q=%f k=%f g0=%f\\n",
+                           float(q_raw(0, 0)), float(k_raw(0, 0)), float(g_raw(0, 0)));
+                }
+#endif
 
                 // Match K1's decay layout.  K2 has four MMA warps (128
                 // compute threads), so each thread performs two of K1's
@@ -953,6 +1037,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     }
                 }
                 compute_barrier.arrive_and_wait();
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 decay g0=%f g15=%f gt0=%f\\n",
+                           float(g_raw(0, 0)), float(g_raw(CHUNK - 1, 0)), float(g_total(0)));
+                }
+#endif
 
                 // Form K1's L and Mqk, then run the same triangular inverse
                 // and Neumann-series routine.  L is a dedicated temporary;
@@ -965,6 +1055,14 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     mma_m16n16_bf16bf16bf16_1warp(qd_out, ki_out, Mqk, compute_tid - 32);
                 }
                 compute_barrier.arrive_and_wait();
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 gemm L=%f M=%f kd=%f qd=%f kr=%f ki=%f\\n",
+                           float(L_fp16(0, 0)), float(Mqk(0, 0)),
+                           float(kd_out(0, 0)), float(qd_out(0, 0)),
+                           float(kr_out(0, 0)), float(ki_out(0, 0)));
+                }
+#endif
 
                 Tensor INV_fp16 = make_tensor(
                     make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].INV.begin())), LMLayout{});
@@ -984,6 +1082,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                     INV_fp16(i, j) = (i == j ? FP16(1.0f) - x : -x);
                 }
                 compute_barrier.arrive_and_wait();
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 inv_init L=%f M=%f I=%f\\n",
+                           float(L_fp16(0, 0)), float(Mqk(0, 0)), float(INV_fp16(0, 0)));
+                }
+#endif
                 // The helper is warp-specialized and owns one 16x16 tile;
                 // its own guard limits work to the first 32 threads.
                 if (compute_tid < 32) {
@@ -991,6 +1095,11 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
                 }
                 cutlass::arch::fence_view_async_shared();
                 compute_barrier.arrive_and_wait();
+#if C1_K1_K2_FUSED_WS_DEBUG
+                if (blockIdx.x == 0 && blockIdx.y == 0 && t == 0 && compute_tid == 0) {
+                    printf("R15 inv_final I=%f\\n", float(INV(0, 0)));
+                }
+#endif
             }
 
             Tensor s_acc = make_tensor(

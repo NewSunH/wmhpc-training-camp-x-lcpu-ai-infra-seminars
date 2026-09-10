@@ -1,0 +1,171 @@
+\section{R17 执行记录：DSM/cluster V-split 可行性 probe}
+
+\subsection{本轮目标}
+
+R3--R11 的 V-split 方向把 \(D=128\) 的 value/state 维度拆给多个 CTA，
+但代价是每个 CTA 都要读取一份相同的只读 tile。R17 只验证一个更窄的问题：
+在 B300 上，cluster DSM 能否让两个 CTA 共享同一个 tile，并在一个简化的
+V-split 读模式中比 duplicate load 更快。
+
+新增的 \code{challenge/dsm\_cluster\_probe.cu} 不接入 \FlashKDA{} K2，
+也不改变默认生产宏。它只启动 cluster size 为 \((2,1,1)\) 的两个 CTA：
+duplicate path 中两个 CTA 都把完整 tile 读入自己的 shared memory；DSM
+path 中 rank 0 读入一次，rank 1 通过
+\code{cluster.map\_shared\_rank} 读取 rank 0 的 shared memory。两个 CTA
+分别消费 tile 的前后半段，并把两半求和结果用于 exactness 检查。
+
+\subsection{实现修正和编译}
+
+编译前对 probe 做了三个最小修正，均局限于
+\code{challenge/dsm\_cluster\_probe.cu}：
+
+\begin{itemize}
+  \item host 侧 exactness 不再解引用 device pointer，而是按输入初始化公式
+        在 host 上重建期望值；
+  \item kernel 末尾增加 CTA 内 shared-memory reduction，避免只写
+        \code{threadIdx.x==0} 的局部累加；
+  \item 最大 tile 为 16,384 个 \code{float}，动态 shared memory 为 64 KiB，
+        因此 launch 前显式设置
+        \code{cudaFuncAttributeMaxDynamicSharedMemorySize}。
+\end{itemize}
+
+本轮首次同步时，远端 checkout 缺少修正后的 probe 源文件，故先确认目标目录
+和 SSH 身份，再在获得写权限后重试。最终使用显式密钥和
+\code{IdentitiesOnly} 完成同步；两个文件均返回成功，随后才提交 Slurm 作业。
+仓库中只记录脱敏后的命令形式：
+
+\begin{lstlisting}
+scp -F none -i <SSH_KEY> -o IdentitiesOnly=yes \\
+  challenge/dsm_cluster_probe.cu challenge/cluster_launch_smoke.cu \\
+  <USER>@<B300_HOST>:<B300_REPO>/assignment02/team/c1_flashkda/challenge/
+\end{lstlisting}
+
+这一步解决的是 R17 的源文件同步权限/身份问题，不是放宽集群权限；实际
+编译和运行仍通过 B300 的 Slurm GPU allocation 完成。
+
+B300 端环境为 \code{infrab300}、CUDA 13.0，CUTLASS 路径沿用
+\code{FlashKDA/cutlass}。编译命令如下：
+
+\begin{lstlisting}
+ssh infrab300 'set -euo pipefail
+  C1=<B300_REPO>/assignment02/team/c1_flashkda
+  cd "$C1/challenge"
+  CUTLASS="$C1/FlashKDA/cutlass"
+  nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+    -I"$CUTLASS/include" -I"$CUTLASS/tools/util/include" \
+    -I"$CUTLASS/examples/common" -I. \
+    -o cluster_launch_smoke cluster_launch_smoke.cu
+  nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+    -I"$CUTLASS/include" -I"$CUTLASS/tools/util/include" \
+    -I"$CUTLASS/examples/common" -I. \
+    -o dsm_cluster_probe dsm_cluster_probe.cu'
+\end{lstlisting}
+
+两个 binary 分别约为 969 KiB 和 995 KiB。先用 job 25001 做
+\code{cudaLaunchKernelExC} smoke test：
+
+\begin{lstlisting}
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --time=00:03:00 \
+  ./cluster_launch_smoke 2>&1 | tee ../results/r17_cluster_launch_smoke_b300.log
+\end{lstlisting}
+
+输出显示普通 kernel 和读取 \code{cooperative\_groups::this\_cluster()} 的
+cluster kernel 均为 \code{launch=no error}、\code{sync=no error}。对应
+结构化结果为 \code{results/r17\_cluster\_launch\_smoke\_b300.json}。
+
+\subsection{多规模 probe 命令}
+
+正式测量为 job 25002。每个 cluster 数量下 probe 内部固定测试
+\(1024,2048,4096,8192,16384\) 个 \code{float}，\code{iters=200}，
+\code{repeats=9}；输出的时间已经除以 \code{iters}，为单次 producer/consumer
+循环的 CUDA-event median。
+
+\begin{lstlisting}
+srun --partition=gpu --gres=gpu:1 --cpus-per-task=4 --time=00:15:00 \
+  bash -lc 'set -euo pipefail
+    for c in 8 16 32 64; do
+      echo "=== clusters=${c} iters=200 repeats=9 ==="
+      ./dsm_cluster_probe "$c" 200 9
+    done' \
+  2>&1 | tee ../results/r17_dsm_cluster_probe_b300.log
+\end{lstlisting}
+
+完整 raw log 保存为
+\code{results/r17\_dsm\_cluster\_probe\_b300.log}，解析后的 JSON 保存为
+\code{results/r17\_dsm\_cluster\_probe\_b300.json}。
+
+\subsection{结果}
+
+所有 20 个规模点的 duplicate 与 DSM exactness 都为 true。下表中的
+\(\mathrm{dup}/\mathrm{dsm}\) 小于 1 表示 DSM 比 duplicate 慢。
+
+\begin{center}
+\small
+\begin{tabular}{@{}r r r r r c c@{}}
+\toprule
+clusters & elems & duplicate (ms) & DSM (ms) & dup/DSM & dup exact & DSM exact \\
+\midrule
+8  & 1024  & 0.0023064 & 0.0026262 & 0.878214 & true & true \\
+8  & 2048  & 0.0037944 & 0.0044792 & 0.847116 & true & true \\
+8  & 4096  & 0.0066885 & 0.0080749 & 0.828307 & true & true \\
+8  & 8192  & 0.0126046 & 0.0154166 & 0.817600 & true & true \\
+8  & 16384 & 0.0243811 & 0.0300067 & 0.812522 & true & true \\
+16 & 1024  & 0.0023093 & 0.0026270 & 0.879043 & true & true \\
+16 & 2048  & 0.0037974 & 0.0044776 & 0.848097 & true & true \\
+16 & 4096  & 0.0066853 & 0.0080749 & 0.827911 & true & true \\
+16 & 8192  & 0.0126032 & 0.0154142 & 0.817633 & true & true \\
+16 & 16384 & 0.0243814 & 0.0300142 & 0.812329 & true & true \\
+32 & 1024  & 0.0023086 & 0.0026286 & 0.878264 & true & true \\
+32 & 2048  & 0.0037976 & 0.0044776 & 0.848133 & true & true \\
+32 & 4096  & 0.0066851 & 0.0080730 & 0.828088 & true & true \\
+32 & 8192  & 0.0126027 & 0.0154066 & 0.818010 & true & true \\
+32 & 16384 & 0.0243795 & 0.0300157 & 0.812226 & true & true \\
+64 & 1024  & 0.0023190 & 0.0026389 & 0.878797 & true & true \\
+64 & 2048  & 0.0037965 & 0.0044771 & 0.847974 & true & true \\
+64 & 4096  & 0.0067645 & 0.0081573 & 0.829257 & true & true \\
+64 & 8192  & 0.0127656 & 0.0155750 & 0.819619 & true & true \\
+64 & 16384 & 0.0246494 & 0.0302826 & 0.813981 & true & true \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+从 JSON 汇总看，\(\mathrm{dup}/\mathrm{dsm}\) 的范围为
+\([0.812226,0.879043]\)。换成 DSM 相对 duplicate 的开销，即
+\(\mathrm{dsm}/\mathrm{dup}\)，范围为 \([1.1376,1.2312]\)。在这个模型中，
+DSM path 没有把 duplicate load 变成收益，反而慢约 13.8\%--23.1\%。
+cluster 数量从 8 到 64 时结果几乎不变，说明本 probe 主要测到的是单个
+2-CTA cluster 内的 DSM mapping/synchronization 代价，而不是 grid 规模。
+
+\subsection{局限和接入判断}
+
+这个 probe 的结论只覆盖 DSM 共享 tile 这个 primitive，不能直接外推到完整
+\FlashKDA{} K2：
+
+\begin{itemize}
+  \item probe 的消费阶段只是线性求和，没有 TMA pipeline、MMA、state
+        recurrence、Neumann inverse 或 output epilogue；
+  \item duplicate path 在两个 CTA 中各自读 global memory，但没有模拟真实
+        K2 中 TMA descriptor、shared-memory ring buffer 和 barrier 的固定成本；
+  \item DSM path 需要 \code{cluster.sync()} 和 remote shared-memory mapping，
+        本轮没有尝试 overlap producer load 与 consumer compute；
+  \item tile 以 contiguous float 表示，没有覆盖 BF16 vectorized load、
+        swizzle、bank conflict 和真实 \(D=128\) state layout；
+  \item 本轮没有改 \FlashKDA{} extension、没有打开任何默认生产宏，也没有把
+        DSM path 接入 benchmark。
+\end{itemize}
+
+\begin{decision}{R17 接入决策}
+在当前证据下，不把 DSM/cluster V-split 接入生产 K2。B300 支持 cluster
+launch，且 DSM path 的 exactness 在 probe 中成立；但 20 个规模点全部显示
+DSM median 慢于 duplicate median。若后续继续这个方向，应先设计能隐藏
+\code{cluster.sync()} 和 remote DSM load 延迟的真实 TMA/MMA pipeline，
+再与 R11/R12 的 V-split 候选在同一端到端 benchmark 下比较。
+\end{decision}
+
+\begin{record}{R17 结论}
+R17 的 DSM/cluster primitive 在 B300 上可编译、可启动、可验证 exact，但
+不是当前 V-split 的直接性能答案。job 25002 中 duplicate 和 DSM 的
+exactness 全部为 true；DSM/duplicate median 比值为 1.1376--1.2312，说明
+简化模型下 DSM 比 duplicate load 慢约 13.8\%--23.1\%。默认生产 kernel
+保持不变，本轮只作为 DSM 方向的负向可行性证据。
+\end{record}

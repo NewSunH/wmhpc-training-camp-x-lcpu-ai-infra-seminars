@@ -1,0 +1,8 @@
+srun: job 25001 queued and waiting for resources
+srun: job 25001 has been allocated resources
+attr=no error
+before launch
+launch=no error
+sync=no error
+group launch=no error
+group sync=no error

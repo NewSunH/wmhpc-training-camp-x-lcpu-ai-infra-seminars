@@ -310,3 +310,58 @@ R13 的完整设计、命令、数值解释和未接入原因见
 R14 的完整代码改动、死锁修正、exactness 数据和失败原因见
 `../C1_R14_EXECUTION_SECTION.tex`。该路线目前只能作为需要重新设计
 CuTe physical layout、线程映射和 pipeline 生命周期的结构性候选。
+
+## R17：DSM/cluster V-split primitive
+
+- `r17_cluster_launch_smoke_b300.{log,json}`：B300 job 25001 的
+  `cudaLaunchKernelExC` cluster smoke。普通 kernel 与使用
+  `cooperative_groups::this_cluster()` 的 cluster kernel 均 launch/sync
+  成功。
+- `r17_dsm_cluster_probe_b300.{log,json}`：B300 job 25002 的 DSM/duplicate
+  多规模 probe。clusters=8/16/32/64、elems=1024--16384 的 20 个组合中，
+  duplicate 与 DSM exactness 全部为 true；`duplicate_ms/dsm_ms` 范围为
+  0.812226--0.879043，即 DSM 比 duplicate 慢约 13.8%--23.1%。
+
+R17 的完整命令、源码修正、结果表和接入判断见
+`../C1_R17_EXECUTION_SECTION.tex`。默认生产宏未改变，DSM path 未接入
+FlashKDA extension。
+
+## R15：最小 `g_total` workspace fusion
+
+- `r15_remote/r15_gtotal_smoke.json`、`r15_gtotal_extended.json`：只跳过
+  K1 的 `g_total[D]` FP32 workspace 写回，并在 K2 从原始 BF16 gate 重建。
+  基础与扩展共 10 个组合全部 output/state exact，覆盖 tail、varlen、B=2、
+  BF16/FP32 state 和 no-state。
+- `r15_remote/r15_gtotal_candidate_bench_v2.json`、`r15_base_bench.json`：
+  同源 B300 CUDA-event median 配对。短 T=16 接近持平；长序列
+  `T=8192,H=96` 候选 2.3392 ms、baseline 1.7516 ms，候选慢约 33.55%（按
+  时间），说明重算 gate 的成本超过节省的一次 workspace 通路。
+
+R15 的完整实现、命令、数值判据和接入决策见
+`../C1_R15_EXECUTION_SECTION.tex`；默认 `C1_K1_K2_FUSED_GTOTAL=0`。
+
+## R16：CHUNK=32 scaled-state reference
+
+- `r16_scaled_state_algebra_b300.{json,log}`：float64 reference 中两个连续
+  CHUNK=32 的 output/state 与 raw 版本最大相对差异分别为
+  `3.40e-12` 和 `3.88e-13`，证明按 key channel 对 state 做逆缩放在代数上
+  可行。
+- `r16_scaled_state_bench_b300.{json,log}`：目标 `H=96,T=8192,D=128` 的
+  runtime operand scaling median 约 `0.7853 ms`；这是独立 microbenchmark，
+  不包含完整 K1/K2/TMA/MMA，不能宣称端到端收益。
+
+R16 的完整设计、命令、reference 和性能边界见
+`../C1_R16_EXECUTION_SECTION.tex`；默认生产 CHUNK 仍为 16。
+
+## R18：Programmatic Dependent Launch
+
+- `r18_pdl_launch_probe_24995.{log,jsonl}`：B300 producer/consumer 独立 probe
+  的 5 个 case 全部 checksum exact；PDL 相对 serialized 的缩短范围为
+  `8.120%--47.044%`，取决于 trigger 后 tail 与 consumer preamble 的长度。
+- `r18_flashkda_vsplit_pdl_25000.{log,json}`：value-split opt-in 的 serial/PDL
+  smoke 都通过；固定 `T=8192,H=96` 的 BF16 state 为 `1.1630/1.1634 ms`，
+  PDL 比 serial 慢约 `0.034%`，未形成端到端收益。job 25006 已恢复默认无
+  opt-in macro 的构建。
+
+R18 的完整命令、PDL 语义、integrated wiring 和接入判断见
+`../C1_R18_EXECUTION_SECTION.tex`；默认 `C1_K1_K2_PDL=0`。

@@ -6,6 +6,10 @@
 #define C1_K2_OUTPUT_STAGES 2
 #endif
 
+#ifndef C1_K1_K2_PDL
+#define C1_K1_K2_PDL 0
+#endif
+
 // ==================== launch_fwd ====================
 template <int D, bool HasStateIn, bool HasStateOut, bool StateFP32, bool IsVarlen>
 void launch_fwd(
@@ -237,7 +241,21 @@ void launch_fwd(
         dim3 grid_k2(N, H * 2);
         dim3 block_k2(kK2Threads);
 
+#if C1_K1_K2_PDL
+        cudaLaunchAttribute pdl_attr{};
+        pdl_attr.id = cudaLaunchAttributeProgrammaticStreamSerialization;
+        pdl_attr.val.programmaticStreamSerializationAllowed = 1;
+        cudaLaunchConfig_t pdl_config{};
+        pdl_config.gridDim = grid_k2;
+        pdl_config.blockDim = block_k2;
+        pdl_config.dynamicSmemBytes = smem_size_k2;
+        pdl_config.stream = stream;
+        pdl_config.attrs = &pdl_attr;
+        pdl_config.numAttrs = 1;
+        cudaLaunchKernelEx(&pdl_config, kernel2,
+#else
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
+#endif
             tma_load_q, tma_load_k, tma_load_g,
             tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
@@ -276,7 +294,21 @@ void launch_fwd(
         dim3 grid_k2(N, H);
         dim3 block_k2(kK2Threads);
 
+#if C1_K1_K2_PDL
+        cudaLaunchAttribute pdl_attr{};
+        pdl_attr.id = cudaLaunchAttributeProgrammaticStreamSerialization;
+        pdl_attr.val.programmaticStreamSerializationAllowed = 1;
+        cudaLaunchConfig_t pdl_config{};
+        pdl_config.gridDim = grid_k2;
+        pdl_config.blockDim = block_k2;
+        pdl_config.dynamicSmemBytes = smem_size_k2;
+        pdl_config.stream = stream;
+        pdl_config.attrs = &pdl_attr;
+        pdl_config.numAttrs = 1;
+        cudaLaunchKernelEx(&pdl_config, kernel2,
+#else
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
+#endif
             tma_load_q, tma_load_k, tma_load_g,
             tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,

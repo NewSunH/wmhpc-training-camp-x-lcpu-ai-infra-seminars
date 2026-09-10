@@ -2,6 +2,14 @@
 
 #include "utils.cuh"
 
+#ifndef C1_K1_K2_PDL
+#define C1_K1_K2_PDL 0
+#endif
+
+#ifndef C1_K1_K2_FUSED_GTOTAL
+#define C1_K1_K2_FUSED_GTOTAL 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K1Layouts {
     using QKLayout = decltype(make_layout(make_shape(Int<CHUNK>{}, Int<D>{}), LayoutRight{}));
@@ -549,7 +557,10 @@ __global__ void __launch_bounds__(NumThreads, 8) _flash_kda_fwd_prepare(
             cute::copy(tma_store_ws_kr, cta_tma.partition_S(s_kr), cta_tma.partition_D(g_ws_tile));
             tma_store_arrive();
         }
-        // Store g_total [D] float
+        // Store g_total [D] float.  The minimal R15 probe reconstructs this
+        // terminal gate factor in K2 from the original BF16 gate tile, so
+        // only this one workspace array is omitted from the producer path.
+#if !C1_K1_K2_FUSED_GTOTAL
         {
             auto g_ws = tma_store_ws_gt.get_tma_tensor(make_shape(H * total_tiles, D));
             auto ws_off = g_ws.layout()(ws_idx, 0);
@@ -560,6 +571,7 @@ __global__ void __launch_bounds__(NumThreads, 8) _flash_kda_fwd_prepare(
             cute::copy(tma_store_ws_gt, cta_tma.partition_S(s_gt), cta_tma.partition_D(g_ws_tile));
             tma_store_arrive();
         }
+#endif
         // Store INV [CHUNK, CHUNK] bf16
         {
             auto g_ws = tma_store_ws_inv.get_tma_tensor(make_shape(H * total_tiles, CHUNK, CHUNK));
@@ -584,5 +596,11 @@ __global__ void __launch_bounds__(NumThreads, 8) _flash_kda_fwd_prepare(
         }
     }
     tma_store_wait<0>();
+#if C1_K1_K2_PDL
+    // PDL is only a scheduling signal.  Publish all producer stores before
+    // announcing that the dependent grid may start.
+    __threadfence();
+    cudaTriggerProgrammaticLaunchCompletion();
+#endif
     __syncthreads();
 }

@@ -1,0 +1,159 @@
+\section{R18 执行记录：K1/K2 Programmatic Dependent Launch overlap probe}
+
+\subsection{本轮目标}
+
+R14/R15 的 workspace 方向尝试减少 K1/K2 之间的 global-memory 通路；R18
+验证一个更保守的调度方向：保留 K1 生产 workspace、K2 消费 workspace 的
+ABI，只把两个同 stream kernel 的严格串行 launch 改成 CUDA Programmatic
+Dependent Launch（PDL）。CUDA Programming Guide 对 PDL 的约束是：primary
+kernel 的所有 thread block 在依赖数据就绪后调用
+\code{cudaTriggerProgrammaticLaunchCompletion()}；secondary kernel 可以先执行
+独立 preamble，但在读 primary 结果前必须调用
+\code{cudaGridDependencySynchronize()}，并且 overlap 是 opportunistic，
+不能作为正确性假设。\footnote{\url{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/programmatic-dependent-launch.html}}
+
+因此本轮分两层：
+
+\begin{enumerate}
+  \item 用独立 CUDA probe 在 B300 上确认 PDL 是否能在“producer tail”和
+        “consumer preamble”之间产生可测 overlap，并用整数 checksum 验证
+        serialized 与 PDL 结果 exact；
+  \item 在 \FlashKDA{} 的 opt-in 分支上做最小 smoke/bench，确认
+        \code{FLASH\_KDA\_C1\_PDL=1} 不破坏正确性，并观察端到端是否出现
+        可见收益。默认构建不设置该宏。
+\end{enumerate}
+
+\subsection{代码检查与修正}
+
+独立 probe 位于 \code{challenge/pdl\_launch\_probe.cu}。producer 先写
+workspace，再执行 \code{\_\_threadfence()} 和
+\code{cudaTriggerProgrammaticLaunchCompletion()}；trigger 之后保留一段
+不被 consumer 读取的 tail work。consumer 先执行独立 preamble，随后在读
+workspace 前调用 \code{cudaGridDependencySynchronize()}，最后用
+\code{atomicXor} 形成整数 checksum。R18 增加 JSON-lines 输出，并让
+\code{pdl\_launch\_probe.sbatch} 同时写入
+\code{results/r18\_pdl\_launch\_probe\_\%j.log} 和
+\code{results/r18\_pdl\_launch\_probe\_\%j.jsonl}。
+
+生产代码已有 \code{C1\_K1\_K2\_PDL} 宏、K1 trigger 和 K2 dependency wait。
+检查时发现一个集成缺口：\code{FLASH\_KDA\_C1\_PDL=1} 会在 K1/K2 编译
+trigger/wait，但 extensible PDL launch 只接在 value-split K2 分支；完整
+K2 分支仍使用普通 triple-chevron launch。R18 在本地源码中补齐完整 K2
+分支的 \code{cudaLaunchKernelEx} opt-in 路径；宏关闭时 launch 代码保持
+原样。远端本轮 smoke/bench 使用的是已同步的 value-split PDL 路径，因此不把
+本地新增的完整 K2 launch 分支误写成已在 B300 上完成端到端验证。
+
+\subsection{独立 PDL probe：B300 exactness 与 overlap}
+
+B300 job 24995 使用远端已有 probe 脚本编译运行，设备为
+\code{NVIDIA B300 SXM6 AC}、compute capability 10.3。命令形状固定为
+96 blocks、128 threads，扫描 producer tail、consumer preamble 和
+workspace words：
+
+\begin{center}
+\small
+\begin{tabular}{@{}r r r r r r c@{}}
+\toprule
+words & tail & preamble & serialized ms & PDL ms & speedup & exact \\
+\midrule
+1,048,576 & 2,000  & 1,000  & 0.079456 & 0.059904 & 24.607\% & yes \\
+1,048,576 & 10,000 & 1,000  & 0.246304 & 0.226304 &  8.120\% & yes \\
+1,048,576 & 2,000  & 10,000 & 0.265280 & 0.226528 & 14.608\% & yes \\
+1,048,576 & 10,000 & 10,000 & 0.432000 & 0.228768 & 47.044\% & yes \\
+262,144   & 2,000  & 1,000  & 0.074624 & 0.053824 & 27.873\% & yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+结果文件为
+\code{results/r18\_pdl\_launch\_probe\_24995.log} 和
+\code{results/r18\_pdl\_launch\_probe\_24995.jsonl}。五个 case 的
+serialized checksum 与 PDL checksum 完全一致，说明 probe 的同步放置满足
+本实验语义。speedup 随 tail/preamble 的相对大小变化，最强 case
+为 47.044\%，符合 PDL 只重叠 trigger 之后 producer tail 与 consumer
+独立 preamble 的预期；当 tail 很长但 preamble 较短时收益下降到 8.120\%。
+
+\subsection{\FlashKDA{} opt-in smoke/bench}
+
+在不复制本地补丁的前提下，远端已有 value-split 分支可以编译
+\code{FLASH\_KDA\_C1\_VSPLIT\_K2=1}，并在此基础上打开
+\code{FLASH\_KDA\_C1\_PDL=1}。job 25000 分别强制 rebuild 两个 binary，
+各运行一次最小正确性 smoke：
+
+\begin{lstlisting}
+python -m pytest -q tests/test_fwd.py::test_fwd
+\end{lstlisting}
+
+两者均通过：
+\begin{center}
+\small
+\begin{tabular}{@{}l l@{}}
+\toprule
+build & smoke \\
+\midrule
+value-split serial & 1 passed in 24.69s \\
+value-split PDL    & 1 passed in 24.44s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+随后运行短 bench：
+\begin{lstlisting}
+python benchmarks/bench_fwd.py --mode fixed --warmup 5 --iters 30 --repeats 3 --H 96
+\end{lstlisting}
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+case & serial mean ms & PDL mean ms & PDL delta \\
+\midrule
+\FlashKDA{} bf16 state & 1.1630 & 1.1634 & -0.034\% \\
+\FlashKDA{} no state   & 1.1642 & 1.1644 & -0.017\% \\
+\FlashKDA{} fp32 state & 1.1796 & 1.1797 & -0.009\% \\
+\code{chunk\_kda} & 2.3747 & 2.3739 & control drift \\
+\code{chunk\_gated\_delta\_rule} & 1.3075 & 1.3073 & control drift \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+完整摘要见 \code{results/r18\_flashkda\_vsplit\_pdl\_25000.log} 和
+\code{results/r18\_flashkda\_vsplit\_pdl\_25000.json}。远端随后用 job
+25006 重新编译默认无 opt-in macro 的 extension，避免把 B300 checkout
+留在 PDL/value-split artifact 状态。
+
+\subsection{解释与接入决策}
+
+独立 probe 证明 B300 上 PDL 机制本身有效：只要 producer trigger 之后仍有
+tail work，且 consumer 在 dependency wait 之前有足够 preamble，serialized
+launch 可以被明显缩短，并保持 checksum exact。但 \FlashKDA{} 的最小
+value-split smoke 没有显示端到端收益，原因也符合结构预期：
+
+\begin{itemize}
+  \item K2 在 \code{cudaGridDependencySynchronize()} 之前可做的独立工作
+        主要是初始 state setup 和少量 shared-memory 初始化；相对 K1/K2
+        主体开销太小；
+  \item K1 的 trigger 放在所有 TMA workspace store 和
+        \code{tma\_store\_wait<0>()} 之后，剩余 tail 很短，缺少可隐藏空间；
+  \item value-split K2 本身不是默认最快路径，本轮只用于 smoke 已有
+        PDL launch wiring，不能外推出完整 K2 的收益；
+  \item PDL overlap 是 opportunistic，不能依赖 scheduler 一定并发执行。
+\end{itemize}
+
+\begin{decision}{R18 接入决策}
+保留 \code{C1\_K1\_K2\_PDL} 作为 opt-in prototype，不打开默认宏。独立
+B300 probe 给出了 8.120\%--47.044\% 的调度上界，并验证了 exactness；
+但当前 \FlashKDA{} value-split opt-in 在固定 \(T=8192,H=96,D=128\)
+上为 \(1.1630\) ms 对 \(1.1634\) ms，属于测量噪声内的无收益。若继续，
+应先在完整 K2 本地补齐的 launch 分支上做 B300 smoke，并用 Nsight Systems
+确认 K1 trigger 之后是否存在可重叠 tail；没有这两个证据前，不应把 PDL
+并入默认生产路径。
+\end{decision}
+
+\begin{record}{R18 结论}
+PDL 是真实可用的 overlap 工具，但不是当前 \FlashKDA{} K1/K2 默认路径的
+免费加速。standalone probe 五个 case 全部 exact，最高缩短 47.044\%；
+远端 value-split \FlashKDA{} PDL smoke 通过，但 fixed-shape bench 与
+serial 基本持平。R18 的工程产物是可复现的 B300 PDL probe、JSON/log
+证据、本地完整 K2 opt-in launch 修正，以及“不默认开启”的接入边界。
+\end{record}

@@ -1,0 +1,75 @@
+{
+  "cases": [
+    {
+      "B": 1,
+      "H": 96,
+      "T": 97,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "fixed_t97_h96_bf16_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true,
+      "varlen": false
+    },
+    {
+      "B": 1,
+      "H": 4,
+      "T": 115,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "varlen_17_33_65_h4_bf16_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true,
+      "varlen": true
+    },
+    {
+      "B": 1,
+      "H": 96,
+      "T": 33,
+      "has_state_in": false,
+      "has_state_out": true,
+      "name": "varlen_16_17_h96_fp32_out_only",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "float32",
+      "state_exact": true,
+      "varlen": true
+    },
+    {
+      "B": 2,
+      "H": 4,
+      "T": 17,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "batch_b2_t17_h4_bf16_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true,
+      "varlen": false
+    },
+    {
+      "B": 2,
+      "H": 4,
+      "T": 64,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "batch_b2_t64_h4_fp32_inout",
+      "output_different": 0,
+      "output_exact": true,
+      "state_different": 0,
+      "state_dtype": "float32",
+      "state_exact": true,
+      "varlen": false
+    }
+  ],
+  "seed": 2027
+}

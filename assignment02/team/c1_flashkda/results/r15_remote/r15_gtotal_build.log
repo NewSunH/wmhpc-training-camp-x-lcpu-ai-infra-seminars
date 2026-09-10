@@ -1,0 +1,11 @@
+srun: job 24969 queued and waiting for resources
+srun: job 24969 has been allocated resources
+Using Python 3.12.13 environment at: /home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv
+Resolved 1 package in 1.37s
+   Building flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 41.98s
+Uninstalled 1 package in 1ms
+Installed 1 package in 0.78ms
+ - flash-kda==0.0.1+c1r15dbg (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)
+ + flash-kda==0.0.1+c1fusedgtotal (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)

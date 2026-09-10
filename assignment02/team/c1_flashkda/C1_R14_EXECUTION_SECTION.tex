@@ -51,7 +51,7 @@ R12 保持一致。由此避免“仅加入 opt-in 代码却改变 baseline 资�
 
 实现提交为 \code{fafe4c3}；随后修正 inverse 的 FP16 alias 类型，提交
 为 \code{3af49e6}；首个 smoke 暴露 MMA-only 分支中使用 CTA-wide
-\code{__syncthreads()} 的死锁，再改为 compute-only named barrier，提交
+\code{\_\_syncthreads()} 的死锁，再改为 compute-only named barrier，提交
 为 \code{6a3d675}。这些提交均已推送到远端仓库。
 
 \subsection{B300 构建命令和失败修正}
@@ -103,7 +103,7 @@ ssh infrab300 'cd <B300_REPO>/assignment02/team/c1_flashkda/FlashKDA &&
 
 job 24943 在分配到 GPU 后不再产生 Python 输出，持续等待。静态检查
 确认 prototype 位于 \code{if (warp\_role == MMA)} 分支，而
-\code{__syncthreads()} 要求整个 CTA（包括 load/store warp）参与，故该
+\code{\_\_syncthreads()} 要求整个 CTA（包括 load/store warp）参与，故该
 调用构成死锁。job 24943 已取消；这一失败保存在初始构建/运行阶段的
 远端临时日志中。
 

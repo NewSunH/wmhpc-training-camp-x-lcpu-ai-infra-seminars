@@ -1,0 +1,27 @@
+SERIAL_BUILD
+SERIAL_SMOKE
+1 passed in 24.69s
+SERIAL_BENCH
+shape=[8192,96,128] warmup=5 iters=30 repeats=3
+  flash_kda (bf16 state) : mean=1.1630 ms, min=1.1600 ms, max=1.1852 ms
+  flash_kda (no state)   : mean=1.1642 ms, min=1.1609 ms, max=1.1750 ms
+  flash_kda (fp32 state) : mean=1.1796 ms, min=1.1765 ms, max=1.1961 ms
+  chunk_kda : mean=2.3747 ms, min=2.3640 ms, max=2.4843 ms
+  chunk_gated_delta_rule : mean=1.3075 ms, min=1.3002 ms, max=1.3763 ms
+PDL_BUILD
+PDL_SMOKE
+1 passed in 24.44s
+PDL_BENCH
+shape=[8192,96,128] warmup=5 iters=30 repeats=3
+  flash_kda (bf16 state) : mean=1.1634 ms, min=1.1598 ms, max=1.2160 ms
+  flash_kda (no state)   : mean=1.1644 ms, min=1.1621 ms, max=1.1836 ms
+  flash_kda (fp32 state) : mean=1.1797 ms, min=1.1772 ms, max=1.2055 ms
+  chunk_kda : mean=2.3739 ms, min=2.3641 ms, max=2.4631 ms
+  chunk_gated_delta_rule : mean=1.3073 ms, min=1.3000 ms, max=1.3706 ms
+
+Notes:
+- Remote job: infrab300 Slurm job 25000.
+- Build mode: FLASH_KDA_CUDA_ARCHS=103a FLASH_KDA_C1_VSPLIT_K2=1, compared with and without FLASH_KDA_C1_PDL=1.
+- Smoke command: python -m pytest -q tests/test_fwd.py::test_fwd.
+- Benchmark command: python benchmarks/bench_fwd.py --mode fixed --warmup 5 --iters 30 --repeats 3 --H 96.
+- Remote default artifact was rebuilt afterwards by job 25006 with no opt-in macros.

@@ -1,0 +1,86 @@
+\section{R15 执行记录：仅消除 $g_{\mathrm{total}}$ workspace 的融合试验}
+
+\subsection{本轮目标与假设}
+
+R14 的完整 workspace fusion 在 exactness 阶段失败，不能继续作为性能候选。
+R15 将改动缩小到一个可以独立审计的数组：K1 原本把每个 tile 的
+\(g_{\mathrm{total}}[D]\)（FP32）写入 workspace，K2 再通过 TMA 读取它。
+候选分支不再写入和读取这一个数组，而是在 K2 读取原始 BF16 gate tile 后，
+按原公式重新计算 gate、累计和以及 \(\exp_2\) 因子。其余五个 workspace、
+TMA descriptor、线程组织和 recurrence 均保持不变。
+
+该设计的预期收益是减少一组 global store/load；代价是 K2 增加 gate 的
+转换、\(\tanh\) sigmoid、求和和指数计算。由于这两项变化位于不同 kernel，
+不能从 DRAM 字节数直接推断端到端收益，必须用同一源码、同一设备和同一
+CUDA-event harness 配对测量。
+
+\subsection{实现与构建}
+
+新增宏 \code{C1\_K1\_K2\_FUSED\_GTOTAL}，默认值为 0。K1 中该宏关闭时
+仍写入原始 \(g_{\mathrm{total}}\)；打开时跳过该 TMA store。K2 中打开时
+增加一个 BF16 raw-gate staging tile，由计算线程按列重建 \(g_{\mathrm{total}}\)。
+没有修改 Python API，也没有改变 workspace ABI 的总分配接口；因此实验
+分支可以和 baseline binary 交替安装。
+
+远端构建使用 B300、\code{sm\_103a}、CUDA 13.0 和现有虚拟环境。候选与
+control 分别从干净 checkout 构建，随后运行 smoke、extended exactness 和
+配对 benchmark。轻量产物位于 \code{results/r15\_remote/}：
+\code{r15\_gtotal\_smoke.json}、\code{r15\_gtotal\_extended.json}、
+\code{r15\_gtotal\_candidate\_bench\_v2.json} 以及
+\code{r15\_base\_bench.json}。
+
+\subsection{正确性结果}
+
+基础 smoke 的五个组合覆盖 \(T=16,17,64\)、\(H=1,96\)、BF16/FP32 state、
+state in/out 和 no-state；extended 集合再覆盖 varlen、tail、\(B=2\) 和
+FP32 output-only。候选的 output 与 final state 在全部十个组合中均为 exact：
+\code{output\_different=0}、\code{state\_different=0}。这说明在当前
+CHUNK=16、既定舍入顺序下，重建的终端 gate factor 与 K1 写回值一致，且
+该局部融合没有改变 recurrence 状态。
+
+\subsection{配对 benchmark}
+
+下表给出 CUDA-event median；candidate/base 来自同一 B300 harness，比例定义
+为 \(t_{\rm base}/t_{\rm cand}-1\)，正值才表示 candidate 更快。
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+case & candidate (ms) & base (ms) & candidate speedup \\
+\midrule
+fixed $T=16,H=1$   & 0.026048 & 0.026016 & $-0.12\%$ \\
+fixed $T=16,H=4$   & 0.030080 & 0.030112 & $+0.11\%$ \\
+fixed $T=16,H=96$  & 0.030880 & 0.030144 & $-2.38\%$ \\
+fixed $T=8192,H=1$  & 1.878432 & 1.262880 & $-32.77\%$ \\
+fixed $T=8192,H=4$  & 1.894848 & 1.284544 & $-32.21\%$ \\
+fixed $T=8192,H=96$ & 2.339168 & 1.751584 & $-25.12\%$ \\
+varlen $17+33,H=4$ & 0.042208 & 0.038144 & $-9.63\%$ \\
+$B=2,T=64,H=4$   & 0.040320 & 0.036192 & $-10.24\%$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+短序列的差异在测量噪声附近；长序列则稳定退化。候选节省了一个
+\(H\,T_{\mathrm{tiles}}\,D\) 的 FP32 workspace 通路，却在每个 K2 tile
+重复执行 gate 近似、累加和 \(\exp_2\)。在 \(T=8192,H=96\) 上，增加的
+计算临界路径远大于一次 workspace TMA store/load 的成本，故总时间反而
+增加约三分之一。这是“减少 DRAM traffic 必然加速”的反例。
+
+\subsection{接入决策}
+
+\begin{decision}{R15 接入决策}
+R15 的局部融合通过了十个 exactness case，但没有一个长序列完整 output
+case 超过同源 baseline；\(T=8192,H=96\) 候选慢约 33.55\%。因此
+\code{C1\_K1\_K2\_FUSED\_GTOTAL} 保持 opt-in，默认值不变。若继续减少
+workspace，应优先寻找能复用 K1 已计算的 gate 或真正重叠 producer/consumer
+的 pipeline，而不是在 K2 重新计算相同非线性函数。
+\end{decision}
+
+\begin{record}{R15 结论}
+R15 给出了一个干净的因果对照：只去掉一个 FP32 workspace 数组即可保持
+完整 output/state exact，但由于重复 gate 计算，长序列端到端时间显著增加。
+该结果支持“workspace 字节数减少并不等于 K2 加速”的判断，也为后续
+workspace fusion 设定了约束：必须同时消除冗余计算，或将计算放入已有
+producer pipeline 的空闲周期。
+\end{record}

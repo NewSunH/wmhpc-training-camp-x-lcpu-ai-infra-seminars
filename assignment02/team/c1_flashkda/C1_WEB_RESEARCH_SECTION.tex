@@ -1,0 +1,134 @@
+\section{公开资料复核与本地 baseline 调优审计}
+
+\subsection{检索范围和证据等级}
+
+本节记录 2026-09-10 对公开仓库、CUDA 文档和 B300/Blackwell kernel
+实践的复核。外部项目的 GPU、输入形状、计时器和数值容差通常与本题不同，
+因此只把它们当作设计线索，不把外部 speedup 直接换算成本题结果。能与本题
+直接比较的数字仍以本地 B300、同一源码和 CUDA-event control 为准。
+
+\subsection{Blackwell 官方调优约束}
+
+NVIDIA 的 \href{https://docs.nvidia.com/cuda/archive/13.0.0/blackwell-tuning-guide/index.html}
+{Blackwell Tuning Guide} 将优先级放在增加并行度、合并且对齐的 global/DSM
+访问和减少冗余访问；对 CC 10.0 列出的资源包括每 SM 64 个 resident warps、
+64K 个 32-bit registers、228 KiB shared memory，以及单 block 227 KiB 的
+动态 shared-memory 上限。对于 thread-block cluster，官方要求使用
+\code{cudaOccupancyMaxActiveClusters} 计算 occupancy，并指出 DSM 访问应尽量
+按 32-byte segment 对齐、避免非 unit stride。
+
+这些原则与 R11/R17 的本地结果一致：仅减少 shared-memory 字节并不能保证
+收益，cluster 的 remote shared-memory 还要支付 mapping、barrier 和调度成本。
+R17 的 20 个 probe 点全部显示 DSM 慢于 duplicate load，因而不能用“Blackwell
+有 DSM”作为接入理由。
+
+CUDA 的 \href{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/programmatic-dependent-launch.html}
+{Programmatic Dependent Launch (PDL)} 文档规定，primary 在发布依赖数据后
+调用 \code{cudaTriggerProgrammaticLaunchCompletion}，secondary 在读取数据
+前调用 \code{cudaGridDependencySynchronize}；两者之间的重叠是 opportunistic，
+不能作为正确性假设。R18 的 standalone probe 符合该协议并获得 8.1--47.0\%
+的合成重叠，但 FlashKDA 的 K1 trigger 后剩余 tail 太短，端到端仍持平。
+
+\subsection{公开 KDA/Blackwell 实现的共同路线}
+
+\paragraph{KDA-B200。}
+\href{https://github.com/Int21-AI/KDA-B200}{Int21-AI/KDA-B200} 是 plain CUDA
+C++ 加 inline PTX 的 Blackwell KDA 实现，不依赖 CUTLASS/CuTe runtime；README
+报告在 B200 上对 30 个 recurrent-decode shape 全部通过，并给出约
+1.0705x 的 decode 几何平均值。其历史 forward/prefill 表在
+\href{https://github.com/Int21-AI/KDA-B200/blob/main/BENCHMARK_GB200.md}{BENCHMARK\_GB200}
+中报告 reusable-workspace 相对 CUTLASS baseline 的约 1.26--2.02x，具体取决
+于 H 和固定/varlen shape。该项目明确使用 shape-specialized AOT 路由、调用者
+复用 workspace、SM100a 目标和独立 exactness 测试；这些是值得借鉴的工程
+模式，但 B200 的 CUTLASS baseline、shape 集合和 CUPTI kernel-only 计时不能
+替代本题 B300 的 CUDA-event 对照。
+
+\paragraph{cuLA。}
+\href{https://github.com/inclusionAI/cuLA}{cuLA} 将 SM100 KDA 与 SM90
+FlashKDA 分成两套实现，README 声称在 18 个配置上相对 FLA 平均约 1.33x
+（固定）和 1.35x（varlen），并把更大 chunk、SM10X 2-CTA 和更积极的小 kernel
+融合列为后续方向。其公开的
+\href{https://raw.githubusercontent.com/inclusionAI/cuLA/main/cula/ops/kda/sm100/fwd_o.py}{SM100
+fwd\_o} 源码显示：默认 chunk size 为 64，使用 \code{tcgen05}、TMEM、8 warps/
+256 threads 和 TMA 异步管线；persistent 版本以 SM 数为 grid 并使用较深 stage，
+non-persistent 版本收窄 stage 以把 shared memory 控制在约 114 KiB、争取
+两块 occupancy。该 trade-off 直接说明“更大 tile”必须连同 TMEM、stage 和
+occupancy 一起重做，不能套在当前 192-thread HMMA K2 外面。
+
+\paragraph{FlashInfer generated Blackwell route。}
+公开的
+\href{https://github.com/flashinfer-ai/flashinfer/pull/4765}{FlashInfer PR \#4765}
+描述了生成式 Blackwell recurrent-KDA specialization：按目标 GPU 和 shape
+选择 AOT/JIT 变体，保留 generic ABI，提供 prepared launcher，并在 B200、B300、
+GB200、GB300 做 route/correctness 回归。该页面给出的 B300 验证为 23/23 JIT、
+158/158 generated-route、25/25 production-route，output/state mismatch 为
+0/0；页面同时明确说明这些是 route/correctness 证据，不沿用旧 revision 的
+performance 数字。可借鉴点是“把 specialization 和 dispatch 作为一等公民”，
+而不是把单一 kernel 的寄存器参数硬编码成所有 shape 的通用答案。
+
+\paragraph{其它 B300 经验。}
+一篇第三方的
+\href{https://www.hjcheng0602.cn/blog/flashattn_G4/}{B300 FlashAttention
+SM103 调优记录}从 SM80 MMA 迁移到 TMA+TCGen05，并明确记录了 TMA/TCGen05
+流水线串行、TC 利用率低、TMEM/SMEM 读回和寄存器压力会抵消理论吞吐的现象。
+它最终把重点转向 ping-pong double buffer、mbarrier 和 pipeline overlap；
+这与本题 R15/R17/R18 的反例一致，故只能作为经验印证，不能当作同一 operator
+的性能证明。
+
+\subsection{本地 baseline 的实际调优结构}
+
+对当前 checkout 的 \code{FlashKDA/csrc/smxx/fwd\_launch.cu}、
+\code{fwd\_kernel1.cuh}、\code{fwd\_kernel2.cuh} 和 \code{setup.py} 做源码
+审计后，baseline 的关键选择如下：
+
+\begin{enumerate}
+  \item 编译使用 \code{-O3}、\code{--use-fast-math}、
+        \code{--ptxas-options=-v,--register-usage-level=10,--warn-on-spills}、
+        \code{-lineinfo}，并在 B300 自动选择 \code{sm\_103a}；实验宏均由
+        环境变量显式 opt-in，默认值关闭。
+  \item K1 prepare 固定 \(\mathrm{CHUNK}=16\)、256 threads 和
+        \code{\_\_launch\_bounds\_(NumThreads,8)}，grid 为
+        \code{(total\_tiles,H)}。它用共享内存 union 复用 q/k/g/beta/dt 和
+        inverse 临时区，TMA 读取原始输入并写出六类 workspace。
+  \item K2 recurrence 固定输入 stage=3、output stage=2、非 split block
+        为 192 threads、grid 为 \code{(N,H)}；四个 warp 负责 MMA，两个 warp
+        负责 load/store。动态 shared memory 在本题 H=96 形状约 200,704 B，
+        NCU 观察到约 66--74 registers/thread、约 9.37\% achieved occupancy，
+        因而属于资源和状态依赖共同限制的 kernel。
+  \item TMA descriptor 仍以 \code{SM90\_TMA\_LOAD/STORE} 形式描述，MMA
+        仍是 SM80 风格 HMMA。这样做不是忘记 Blackwell，而是保留已经验证的
+        \(16\times16\) Neumann inverse、K-inter layout、state ABI、tail
+        predicate 和 bf16 rounding 顺序；本地 SASS 计数为 HMMA 非零、WGMMA/
+        TCGEN05 为零。
+\end{enumerate}
+
+这套结构解释了为何 R3/R4 的 V-split 即使把 dynamic shared memory 从约
+98.4 KiB 降到 68.6 KiB，H=96 仍然变慢：CTA 数翻倍、每个 CTA 的计算 warp
+减少且重复读取 workspace。R15 又显示，删除一条 FP32 workspace 通路会因为
+K2 重算 gate 而在长序列慢约 33.6\%；R18 显示，PDL 只有在 trigger 后存在
+真实 producer tail 时才有机会隐藏 launch 串行。三个结果都指向同一个基线
+事实：当前瓶颈是 recurrence 临界路径和管线组织，而不是单一 DRAM 字节计数。
+
+\subsection{对后续工作的筛选}
+
+公开资料把最有希望的路线收敛到两个层次：
+
+\begin{enumerate}
+  \item 低风险路线：保持 CHUNK=16 和 HMMA ABI，做 prepared/reusable
+        workspace、shape-specific stage/warp 配置，并用 Nsight Systems 确认
+        K1/K2 是否存在可重叠 tail；PDL 只能作为有证据的 opt-in。
+  \item 高风险路线：建立独立 SM103a/SM100 family kernel，迁移到
+        tcgen05+TMEM，采用 64 chunk、256-thread warp specialization、
+        persistent/non-persistent 双路由和 ping-pong TMA/mbarrier。它最可能
+        取得超过 5--10\% 的结构性收益，但必须从 layout、state update、
+        epilogue、数值缩放和 shape dispatch 重新验证，不能通过局部宏替换完成。
+\end{enumerate}
+
+\begin{decision}{公开资料复核结论}
+没有找到一个与本题相同的 B300、\(T=8192,H=96,D=128\)、同一 CUDA-event
+口径且公开证明“只修改当前 HMMA K2 即稳定快 1--5\%”的实现。公开成功案例
+几乎都采用 Blackwell-native tcgen05/TMEM、shape specialization、persistent
+调度或 reusable workspace；这些资料提高了 SM103 专版值得尝试的可信度，
+同时也证明迁移成本远高于调整 stage 或减少一个 store。当前默认 baseline
+保持不变，R15/R17/R18 的 opt-in 分支只作为可复核的负向或边界证据。
+\end{decision}

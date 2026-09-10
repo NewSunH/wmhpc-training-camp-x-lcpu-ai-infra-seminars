@@ -1,0 +1,376 @@
+{
+  "device": "infrab300 B300",
+  "job_ids": {
+    "smoke": 25001,
+    "probe": 25002
+  },
+  "source": "assignment02/team/c1_flashkda/results/r17_dsm_cluster_probe_b300.log",
+  "all_exact": true,
+  "record_count": 20,
+  "duplicate_over_dsm_min": 0.812226,
+  "duplicate_over_dsm_max": 0.879043,
+  "dsm_over_duplicate_min": 1.1376013302847643,
+  "dsm_over_duplicate_max": 1.2311860374494965,
+  "records": [
+    {
+      "clusters": 8,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 1024,
+      "duplicate_ms": 0.0023064,
+      "dsm_ms": 0.00262624,
+      "duplicate_over_dsm": 0.878214,
+      "dsm_over_duplicate": 1.1386749913284773,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 8,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 2048,
+      "duplicate_ms": 0.0037944,
+      "dsm_ms": 0.0044792,
+      "duplicate_over_dsm": 0.847116,
+      "dsm_over_duplicate": 1.1804764916719377,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 8,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 4096,
+      "duplicate_ms": 0.00668848,
+      "dsm_ms": 0.00807488,
+      "duplicate_over_dsm": 0.828307,
+      "dsm_over_duplicate": 1.2072817740353563,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 8,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 8192,
+      "duplicate_ms": 0.0126046,
+      "dsm_ms": 0.0154166,
+      "duplicate_over_dsm": 0.8176,
+      "dsm_over_duplicate": 1.2230931564666867,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 8,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 16384,
+      "duplicate_ms": 0.0243811,
+      "dsm_ms": 0.0300067,
+      "duplicate_over_dsm": 0.812522,
+      "dsm_over_duplicate": 1.2307361029650017,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 16,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 1024,
+      "duplicate_ms": 0.00230928,
+      "dsm_ms": 0.00262704,
+      "duplicate_over_dsm": 0.879043,
+      "dsm_over_duplicate": 1.1376013302847643,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 16,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 2048,
+      "duplicate_ms": 0.00379744,
+      "dsm_ms": 0.0044776,
+      "duplicate_over_dsm": 0.848097,
+      "dsm_over_duplicate": 1.1791101373556923,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 16,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 4096,
+      "duplicate_ms": 0.00668528,
+      "dsm_ms": 0.00807488,
+      "duplicate_over_dsm": 0.827911,
+      "dsm_over_duplicate": 1.207859655840892,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 16,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 8192,
+      "duplicate_ms": 0.0126032,
+      "dsm_ms": 0.0154142,
+      "duplicate_over_dsm": 0.817633,
+      "dsm_over_duplicate": 1.2230385933731116,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 16,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 16384,
+      "duplicate_ms": 0.0243814,
+      "dsm_ms": 0.0300142,
+      "duplicate_over_dsm": 0.812329,
+      "dsm_over_duplicate": 1.23102857095983,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 32,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 1024,
+      "duplicate_ms": 0.00230864,
+      "dsm_ms": 0.00262864,
+      "duplicate_over_dsm": 0.878264,
+      "dsm_over_duplicate": 1.1386097442650218,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 32,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 2048,
+      "duplicate_ms": 0.0037976,
+      "dsm_ms": 0.0044776,
+      "duplicate_over_dsm": 0.848133,
+      "dsm_over_duplicate": 1.1790604592374132,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 32,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 4096,
+      "duplicate_ms": 0.00668512,
+      "dsm_ms": 0.00807296,
+      "duplicate_over_dsm": 0.828088,
+      "dsm_over_duplicate": 1.2076013594370782,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 32,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 8192,
+      "duplicate_ms": 0.0126027,
+      "dsm_ms": 0.0154066,
+      "duplicate_over_dsm": 0.81801,
+      "dsm_over_duplicate": 1.2224840708737017,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 32,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 16384,
+      "duplicate_ms": 0.0243795,
+      "dsm_ms": 0.0300157,
+      "duplicate_over_dsm": 0.812226,
+      "dsm_over_duplicate": 1.2311860374494965,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 64,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 1024,
+      "duplicate_ms": 0.00231904,
+      "dsm_ms": 0.00263888,
+      "duplicate_over_dsm": 0.878797,
+      "dsm_over_duplicate": 1.13791913895405,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 64,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 2048,
+      "duplicate_ms": 0.00379648,
+      "dsm_ms": 0.00447712,
+      "duplicate_over_dsm": 0.847974,
+      "dsm_over_duplicate": 1.1792818610923803,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 64,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 4096,
+      "duplicate_ms": 0.00676448,
+      "dsm_ms": 0.00815728,
+      "duplicate_over_dsm": 0.829257,
+      "dsm_over_duplicate": 1.2058990491508585,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 64,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 8192,
+      "duplicate_ms": 0.0127656,
+      "dsm_ms": 0.015575,
+      "duplicate_over_dsm": 0.819619,
+      "dsm_over_duplicate": 1.2200758287898728,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    },
+    {
+      "clusters": 64,
+      "iters": 200,
+      "repeats": 9,
+      "block": 128,
+      "cluster_dim": [
+        2,
+        1,
+        1
+      ],
+      "elems": 16384,
+      "duplicate_ms": 0.0246494,
+      "dsm_ms": 0.0302826,
+      "duplicate_over_dsm": 0.813981,
+      "dsm_over_duplicate": 1.2285329460351977,
+      "duplicate_exact": true,
+      "dsm_exact": true
+    }
+  ]
+}

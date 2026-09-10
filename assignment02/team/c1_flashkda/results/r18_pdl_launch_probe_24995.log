@@ -1,0 +1,10 @@
+device=NVIDIA B300 SXM6 AC cc=10.3 blocks=96 threads=128 words=1048576 tail=2000 preamble=1000
+serialized_ms=0.079456 pdl_ms=0.059904 speedup=24.607% serial_out=0x1c30d9bf pdl_out=0x1c30d9bf exact=yes
+device=NVIDIA B300 SXM6 AC cc=10.3 blocks=96 threads=128 words=1048576 tail=10000 preamble=1000
+serialized_ms=0.246304 pdl_ms=0.226304 speedup=8.120% serial_out=0x1c30d9bf pdl_out=0x1c30d9bf exact=yes
+device=NVIDIA B300 SXM6 AC cc=10.3 blocks=96 threads=128 words=1048576 tail=2000 preamble=10000
+serialized_ms=0.265280 pdl_ms=0.226528 speedup=14.608% serial_out=0x9bd59c92 pdl_out=0x9bd59c92 exact=yes
+device=NVIDIA B300 SXM6 AC cc=10.3 blocks=96 threads=128 words=1048576 tail=10000 preamble=10000
+serialized_ms=0.432000 pdl_ms=0.228768 speedup=47.044% serial_out=0x9bd59c92 pdl_out=0x9bd59c92 exact=yes
+device=NVIDIA B300 SXM6 AC cc=10.3 blocks=96 threads=128 words=262144 tail=2000 preamble=1000
+serialized_ms=0.074624 pdl_ms=0.053824 speedup=27.873% serial_out=0x458fe2e8 pdl_out=0x458fe2e8 exact=yes

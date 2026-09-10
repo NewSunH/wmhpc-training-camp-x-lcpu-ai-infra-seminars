@@ -76,6 +76,21 @@ def get_c1_fused_workspace_args():
     return ["-DC1_K1_K2_FUSED_WS=1"] if is_flag_set("FLASH_KDA_C1_FUSED_WS") else []
 
 
+def get_c1_fused_workspace_debug_args():
+    """Enable a one-CTA printf trace for the fused-workspace tile oracle."""
+    return ["-DC1_K1_K2_FUSED_WS_DEBUG=1"] if is_flag_set("FLASH_KDA_C1_FUSED_WS_DEBUG") else []
+
+
+def get_c1_pdl_args():
+    """Enable the opt-in CUDA Programmatic Dependent Launch prototype."""
+    return ["-DC1_K1_K2_PDL=1"] if is_flag_set("FLASH_KDA_C1_PDL") else []
+
+
+def get_c1_fused_gtotal_args():
+    """Enable the minimal opt-in g_total producer/consumer fusion probe."""
+    return ["-DC1_K1_K2_FUSED_GTOTAL=1"] if is_flag_set("FLASH_KDA_C1_FUSED_GTOTAL") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -151,6 +166,9 @@ ext_modules = [
                 *get_c1_tma_swizzled_output_args(),
                 *get_c1_fused_tma_epilogue_args(),
                 *get_c1_fused_workspace_args(),
+                *get_c1_fused_workspace_debug_args(),
+                *get_c1_fused_gtotal_args(),
+                *get_c1_pdl_args(),
             ],
         },
     )

@@ -1,0 +1,8 @@
+fixed_t16_h1: mean=0.026629 ms median=0.026048 ms min=0.025056 ms
+fixed_t16_h4: mean=0.030461 ms median=0.030080 ms min=0.028000 ms
+fixed_t16_h96: mean=0.031211 ms median=0.030880 ms min=0.029472 ms
+fixed_t8192_h1: mean=1.878440 ms median=1.878432 ms min=1.876288 ms
+fixed_t8192_h4: mean=1.895056 ms median=1.894848 ms min=1.892512 ms
+fixed_t8192_h96: mean=2.339792 ms median=2.339168 ms min=2.332960 ms
+varlen_17_33_h4: mean=0.042435 ms median=0.042208 ms min=0.041120 ms
+batch_like_64_h4: mean=0.040435 ms median=0.040320 ms min=0.039296 ms
