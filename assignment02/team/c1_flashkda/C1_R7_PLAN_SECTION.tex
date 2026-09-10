@@ -1,0 +1,110 @@
+\section{R7 预检结果与下一轮计划}
+
+\subsection{R6 direct epilogue 的快速瓶颈预检}
+
+为了检验“寄存器和 global read 已优化，但其他路径仍在拖慢”的判断，
+在 B300 job 24279 对 general 和 direct 两个 \code{state2} binary 使用同一
+组 NCU 指标重新采样。此次只观察一个 \(128\times128\times16\) kernel，
+不把 NCU replay 时间当作正式 benchmark：
+
+\begin{lstlisting}
+MET=smsp__warp_issue_stalled_barrier_per_warp_active,\
+smsp__warp_issue_stalled_long_scoreboard_per_warp_active,\
+smsp__warp_issue_stalled_mio_throttle_per_warp_active,\
+smsp__warp_issue_stalled_math_pipe_throttle_per_warp_active,\
+smsp__warp_issue_stalled_wait_per_warp_active,\
+sm__pipe_tensor_cycles_active,sm__pipe_tma_cycles_active,\
+sm__inst_executed_pipe_tmem,sm__inst_executed_pipe_tma,\
+gpu__time_duration.avg
+ncu --target-processes application-only --csv --page details \
+  -k regex:gemm_device --metrics $MET ./tcgen05_sm103_2sm_state2_r6_base
+ncu --target-processes application-only --csv --page details \
+  -k regex:gemm_device --metrics $MET ./tcgen05_sm103_2sm_state2_r6_direct
+\end{lstlisting}
+
+关键计数如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r}
+\toprule
+metric & general & direct \\
+\midrule
+barrier stall (\%) & 9.74 & 7.80 \\
+long-scoreboard stall (\%) & 25.45 & 20.84 \\
+wait stall (\%) & 22.39 & 23.50 \\
+MIO throttle (\%) & 0.39 & 0.85 \\
+tensor pipe cycles & 256 & 256 \\
+TMA pipe cycles & 8 & 8 \\
+TMEM instructions & 512 & 512 \\
+TMA instructions & 4 & 4 \\
+\code{gpu\_\_time\_\_duration} (ns) & 12,672 & 12,896 \\
+\bottomrule
+\end{tabular}
+\caption{job 24279 的单次 NCU replay；CSV 文件为
+\code{results/tcgen05\_r7\_base\_stalls\_24279.csv} 和
+\code{results/tcgen05\_r7\_direct\_stalls\_24279.csv}。}
+\end{table}
+
+该预检支持但不能单独证明以下判断：
+
+\begin{enumerate}
+\item direct epilogue 确实降低了 barrier 和 long-scoreboard stall，
+      与移除 C global load、减少寄存器临时量的预期一致；
+\item tensor/TMA/TMEM 指令数量没有变化，说明 direct 只改变写回前的
+      数据流，不会自动减少 TCGEN05 主计算或 cluster/TMA 固定工作；
+\item wait stall 略升，MIO throttle 也略升，说明减少一种依赖后，其他
+      固定延迟和管线等待会成为相对更显著的部分；
+\item NCU replay 下 direct 的单次时间反而略慢 1.8\%，因此 stall counter
+      不能被解读为端到端加速证明。正式 CUDA event 的三次大问题重复仍然
+      只显示约 2--3\% 优势。
+\end{enumerate}
+
+因而更准确的 R6 结论是“资源优化有效，但当前 probe 的主导时间不在
+被移除的 C/AXPBY 工作上”；不能仅凭 DRAM read 减少就断言 DRAM latency
+是瓶颈。这个区分与 Blackwell 调优指南要求同时检查寄存器、shared memory、
+cluster occupancy 和流水线等待的原则一致：
+\url{https://docs.nvidia.com/cuda/blackwell-tuning-guide/}。
+
+\subsection{R7 目标}
+
+R7 不再扩大完整 K2 的 2-CTA 改写，而是建立一个语义上接近 K2 的
+state-only probe，回答 direct epilogue 是否仍然有效，以及 K2 剩余时间
+到底由哪一类等待主导。目标分三层：
+
+\begin{enumerate}
+\item \textbf{语义对齐：} 输入、state 更新、输出布局采用 K2 的一个
+      固定 chunk/head 子问题；不再使用与 K2 无关的 C/AXPBY 参数；
+\item \textbf{公平消融：} 至少保留 general、beta0-specialized 和
+      direct 三个 variant，使 global read、寄存器 fragment 和写回协议
+      可以逐项比较；
+\item \textbf{端到端门槛：} 在 B300 上完成 focused/extended exactness，
+      并使用同一 allocation、同一 warm-up/event 配置测试 H=1、H=4 和
+      H=96。只有稳定达到至少 10\% 的端到端改善，才允许进入窄范围 K2
+      集成；否则停止该路线。
+\end{enumerate}
+
+\subsection{R7 执行顺序}
+
+\begin{enumerate}
+\item 从 R4 的 opt-in split 代码中抽取单个 state-update 子路径，固定
+      \(T=16,17,64\) 和一个 head，先实现 CPU/reference 对照；
+\item 将 R6 direct epilogue 套到该子路径，同时保留一个只去掉 C load
+      但不改变其他 layout 的中间 variant；
+\item 在 B300 上重复 correctness、CUDA events 和 NCU stall counters；
+      重点观察 barrier、long scoreboard、TMEM、TMA store 以及
+      active warps 是否发生实际变化；
+\item 只有 state-only probe 通过门槛，才扩展到 H=4 和 H=96；完整 K2
+      的默认环境继续保持 baseline；
+\item 若收益仍低于 10\%，将“寄存器/流量优化有效但不是主导瓶颈”作为
+      最终负结果，并停止继续扩大 SM100 代码面。
+\end{enumerate}
+
+\begin{record}{R7 计划判定}
+R6 的快速 NCU 预检已经足以支持继续做一次小而受控的 R7，但不足以支持
+直接集成完整 K2。R7 的唯一必要产出是一个语义公平、可重复、带 exactness
+和 stall counter 的 state-only 对照；如果它不能把局部资源收益转化为
+双位数端到端收益，就应结束 SM100 v2 优化路线，保留 baseline 作为 C1
+最终实现。
+\end{record}

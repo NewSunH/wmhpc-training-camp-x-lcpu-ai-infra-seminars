@@ -77,3 +77,8 @@ git；报告中的结论同时记录了关键计数和指标。
 - `tcgen05_direct_epilogue_{base,direct}_ncu_24263.csv`：第六轮 NCU
   对照；direct epilogue 将 registers/thread 从 181 降至 106，dynamic
   shared memory 保持 4,224 B。NCU replay 时间仅用于结构观察。
+- `tcgen05_r7_{base,direct}_stalls_24279.csv`：R7 预检的 barrier、
+  long-scoreboard、wait/MIO、Tensor/TMA/TMEM 和 kernel-time counters。
+  direct 使 barrier stall 从 9.74% 降至 7.80%、long-scoreboard 从
+  25.45% 降至 20.84%，但 Tensor/TMA/TMEM 指令数量不变，单次 NCU replay
+  时间受噪声影响反而略高；该结果只用于规划 R7，不替代 CUDA-event 重复。
