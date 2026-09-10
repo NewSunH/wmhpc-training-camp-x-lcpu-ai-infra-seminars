@@ -1,0 +1,4 @@
+logical smem: Sw<3,4,3> o smem_ptr[16b](unset) o ((_32,_4),_16):((_1,_512),_32)
+tma smem: Sw<3,4,3> o smem_ptr[16b](unset) o (_1,(_32,_4),_16):(_0,(_1,_512),_32)
+R11-B swizzled TMA store: mismatches=0 total=2048 cosize=2048 bytes=4096
+row0: 0001 0002 0003 0004 0005 0006 0007 0008 0009 000a 000b 000c 000d 000e 000f 0010

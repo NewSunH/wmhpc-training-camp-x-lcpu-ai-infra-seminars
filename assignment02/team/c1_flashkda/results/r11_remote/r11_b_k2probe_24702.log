@@ -1,0 +1,2 @@
+sync: an illegal memory access was encountered
+swizzled K2: Sw<3,4,3> o smem_ptr[16b](unset) o ((_8,_2),(_8,_16)):((_8,_64),(_1,_128))

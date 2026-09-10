@@ -52,6 +52,8 @@ void launch_fwd(
     using TMAFP32StateSmemLayout = typename K2L::TMAFP32StateSmemLayout;
     using TMAFP32ValueSliceStateSmemLayout = typename K2L::TMAFP32ValueSliceStateSmemLayout;
     using TMAValueSliceVOLayout = typename K2L::TMAValueSliceVOLayout;
+    using TMAFullSwizzledOutputLayout = typename K2L::TMAFullSwizzledOutputLayout;
+    using TMASwizzledValueSliceOutputLayout = typename K2L::TMASwizzledValueSliceOutputLayout;
 
     // --- gmem layouts for original tensors
     auto gmem_layout = make_layout(make_shape(H, T_total, D), make_stride(D, D * H, 1));
@@ -123,6 +125,16 @@ void launch_fwd(
 
     auto tma_store_out = make_tma_copy(SM90_TMA_STORE{}, m_out, TMAVOLayout{});
     auto tma_store_out_slice = make_tma_copy(SM90_TMA_STORE{}, m_out, TMAValueSliceVOLayout{});
+    // R11-B uses a separate [head,value,token] view so that the TMA
+    // descriptor's unit-stride dimension matches the swizzled [D,CHUNK]
+    // shared tile.  The physical pointer is unchanged.
+    auto out_swizzled_gmem_layout = make_layout(
+        make_shape(H, D, T_total), make_stride(D, 1, D * H));
+    Tensor m_out_swizzled = make_tensor(make_gmem_ptr(out_ptr), out_swizzled_gmem_layout);
+    auto tma_store_out_swizzled = make_tma_copy(
+        SM90_TMA_STORE{}, m_out_swizzled, TMAFullSwizzledOutputLayout{});
+    auto tma_store_out_swizzled_slice = make_tma_copy(
+        SM90_TMA_STORE{}, m_out_swizzled, TMASwizzledValueSliceOutputLayout{});
 
     // --- State TMA descriptors (conditional on HasStateIn/HasStateOut and StateFP32)
     auto make_state_tma = [&]() {
@@ -214,6 +226,7 @@ void launch_fwd(
             decltype(tma_store_final_state),
             decltype(tma_store_final_state_slice),
             decltype(tma_store_out), decltype(tma_store_out_slice),
+            decltype(tma_store_out_swizzled), decltype(tma_store_out_swizzled_slice),
             CHUNK, D, kInputStages, kOutputStages, kK2Threads,
             HasStateIn, HasStateOut, StateFP32, IsVarlen, true
         >;
@@ -232,6 +245,7 @@ void launch_fwd(
             tma_store_final_state,
             tma_store_final_state_slice,
             tma_store_out, tma_store_out_slice,
+            tma_store_out_swizzled, tma_store_out_swizzled_slice,
             out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #else
@@ -248,6 +262,7 @@ void launch_fwd(
             decltype(tma_store_final_state),
             decltype(tma_store_final_state_slice),
             decltype(tma_store_out), decltype(tma_store_out_slice),
+            decltype(tma_store_out_swizzled), decltype(tma_store_out_swizzled_slice),
             CHUNK, D, kInputStages, kOutputStages, kK2Threads,
             HasStateIn, HasStateOut, StateFP32, IsVarlen
         >;
@@ -266,6 +281,7 @@ void launch_fwd(
             tma_store_final_state,
             tma_store_final_state_slice,
             tma_store_out, tma_store_out_slice,
+            tma_store_out_swizzled, tma_store_out_swizzled_slice,
             out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #endif

@@ -1,0 +1,12 @@
+track,case,kernel,grid,block,registers_per_thread,dynamic_shared_memory_bytes,instances,mean_duration_us,min_duration_us,max_duration_us
+base,fixed_T8192_H96,prepare,"512,96,1",256,32,21248,21,456.248,454.726,460.646
+base,fixed_T8192_H96,recurrence_state_variant_0,"1,96,1",192,66,98432,7,1285.564,1285.103,1286.319
+base,fixed_T8192_H96,recurrence_state_variant_1,"1,96,1",192,73,98432,7,1285.656,1283.695,1287.759
+base,fixed_T8192_H96,recurrence_state_variant_2,"1,96,1",192,74,98432,7,1239.242,1234.094,1248.430
+vsplit,fixed_T8192_H96,prepare,"512,96,1",256,32,21248,21,460.535,458.050,465.698
+vsplit,fixed_T8192_H96,recurrence_state_variant_0,"1,192,1",128,78,68608,14,1556.716,1546.117,1580.997
+vsplit,fixed_T8192_H96,recurrence_state_variant_1,"1,192,1",128,82,68608,7,1581.098,1567.525,1602.789
+base,varlen_T8192_H96,prepare,"518-520,96,1",256,32,21248,42,480.689,477.604,486.629
+base,varlen_T8192_H96,recurrence_state_variants,"6-8,96,1",192,66-74,98432,14 each,825.119-859.684,684.615,1048.138
+base,fixed_T16_or_8192_H1,prepare,"1-512,1,1",256,32,21248,42,9.648,6.432,13.312
+base,fixed_T16_or_8192_H1,recurrence_state_variants,"1,1,1",192,66-74,98432,14 each,614.120-628.751,7.264,1253.387

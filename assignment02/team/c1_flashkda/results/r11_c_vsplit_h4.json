@@ -1,0 +1,128 @@
+{
+  "device": "NVIDIA B300 SXM6 AC",
+  "torch": "2.13.0+cu129",
+  "cuda": "12.9",
+  "protocol": "CUDA events around one flash_kda.fwd call; prepare+recurrence; host allocation excluded from event",
+  "results": [
+    {
+      "seq_lens": [
+        16
+      ],
+      "T_total": 16,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "bf16_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 0.037584319956600665,
+      "event_ms_median": 0.037567999213933945,
+      "event_ms_min": 0.0344959981739521,
+      "event_ms_max": 0.05398400127887726,
+      "event_ms_trimmed_mean": 0.03744974216653241,
+      "host_wall_ms_median": 0.056029,
+      "host_minus_event_ms_median": 0.018461000786066058
+    },
+    {
+      "seq_lens": [
+        16
+      ],
+      "T_total": 16,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "no_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 0.035368832029402254,
+      "event_ms_median": 0.0352960005402565,
+      "event_ms_min": 0.03296000137925148,
+      "event_ms_max": 0.04291199892759323,
+      "event_ms_trimmed_mean": 0.03520896002650261,
+      "host_wall_ms_median": 0.05364,
+      "host_minus_event_ms_median": 0.0183439994597435
+    },
+    {
+      "seq_lens": [
+        16
+      ],
+      "T_total": 16,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "fp32_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 0.05131206403672695,
+      "event_ms_median": 0.05110400170087814,
+      "event_ms_min": 0.0469760000705719,
+      "event_ms_max": 0.06015999987721443,
+      "event_ms_trimmed_mean": 0.05116693338586224,
+      "host_wall_ms_median": 0.069668,
+      "host_minus_event_ms_median": 0.01856399829912185
+    },
+    {
+      "seq_lens": [
+        8192
+      ],
+      "T_total": 8192,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "bf16_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 1.1516216974258422,
+      "event_ms_median": 1.1518080234527588,
+      "event_ms_min": 1.1448960304260254,
+      "event_ms_max": 1.1991039514541626,
+      "event_ms_trimmed_mean": 1.1515275393591986,
+      "host_wall_ms_median": 1.170417,
+      "host_minus_event_ms_median": 0.01860897654724125
+    },
+    {
+      "seq_lens": [
+        8192
+      ],
+      "T_total": 8192,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "no_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 1.1462666907310486,
+      "event_ms_median": 1.1461759805679321,
+      "event_ms_min": 1.1391040086746216,
+      "event_ms_max": 1.1686079502105713,
+      "event_ms_trimmed_mean": 1.1461662607722811,
+      "host_wall_ms_median": 1.165227,
+      "host_minus_event_ms_median": 0.019051019432067884
+    },
+    {
+      "seq_lens": [
+        8192
+      ],
+      "T_total": 8192,
+      "N": 1,
+      "H": 4,
+      "D": 128,
+      "state_mode": "fp32_state",
+      "warmup": 20,
+      "iters": 100,
+      "repeats": 5,
+      "event_ms_mean": 1.1446946568489074,
+      "event_ms_median": 1.1448960304260254,
+      "event_ms_min": 1.1373120546340942,
+      "event_ms_max": 1.154304027557373,
+      "event_ms_trimmed_mean": 1.144651948346032,
+      "host_wall_ms_median": 1.163817,
+      "host_minus_event_ms_median": 0.01892096957397471
+    }
+  ]
+}

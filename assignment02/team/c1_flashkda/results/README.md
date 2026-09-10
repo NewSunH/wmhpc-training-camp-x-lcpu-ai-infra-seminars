@@ -219,3 +219,39 @@ pair-packed direct 对 V-split 有明显局部收益，但 non-split default 仍
 14.2%，且 direct path 增加寄存器、没有减少 shared-memory 配置。因此两个宏
 均保持 opt-in，不进入默认构建；后续优化应转向 output storage/epilogue
 结构或 launch/TMA 固定开销，而不是继续增加普通 global-store 地址计算。
+
+## R11：shared storage、swizzled TMA 与固定开销
+
+- `r11_a_SUMMARY.md` 及 `r11_a_*`：删除 direct-output 专用 output ring 的
+  opt-in probe。T=16/17/64/97、H=1/4/96、varlen、B=2、BF16/FP32 state
+  均 exact；dynamic shared memory 仍由 union 中其他成员主导，compact path
+  没有稳定性能收益。
+- `r11_b_probe_24689.log`：独立 128-byte `Swizzle<3,4,3>` TMA store probe，
+  2048/2048 元素 exact。`r11_b_k2probe_24702.log` 保留直接套用
+  `[CHUNK,D]=[16,128]` layout 的 illegal-memory-access 负 probe；随后改用
+  `[D,CHUNK]=[128,16]` 逻辑 tile 才能接入完整 K2。
+- `r11_b_smoke_24758.log` 与远端 `r11_b_smoke_%j.json`、
+  `r11_b_extended_%j.json`：完整 swizzled K2 的 5+5 case exactness，含
+  H=96、tail、varlen、B=2、BF16/FP32 state，所有 output/state difference=0。
+- `r11_remote/r11_default_smoke_24786.log` 与
+  `r11_remote/r11_default_smoke_%j.json`：关闭 R11 开关后的默认路径 5-case
+  exactness 回归，所有 output/state difference=0。
+- `r11_remote/r11_b_rebuild_base_24761.log`、
+  `r11_remote/r11_b_rebuild_swz_24768.log`、
+  `r11_remote/r11_bench_base_24765.log`、`r11_remote/r11_bench_swz_24772.log`：同源 B300
+  H=96/T=8192 benchmark。baseline BF16/no-state/FP32 为
+  1.0272/1.0285/0.9977 ms；swizzled TMA 为 1.7623/1.7615/1.7104 ms，
+  回退约 71--72%，故只保留 opt-in。
+- `r11_remote/r11_bench_small_24773.log` 与 `r11_remote/r11_bench_smallb_24778.log`：H=1/4
+  同源对照；baseline 与 swizzled 分别约 0.733/0.748 ms，几乎无变化，
+  退化集中在 H=96 的完整 output 路径。
+- `r11_c_overhead_probe.py`、`r11_c_{base,vsplit}_h*.json`、
+  `r11_c_ncu_summary.csv`、`r11_c_nsys_summary.csv`：CUDA-event/NCU/NSYS
+  固定开销诊断。H=1/4 的 V-split 分别快 12.5%/10.8%，H=96 慢 14.1%；
+  H=96 baseline grid=(1,96,1), block=192, 98,432 B dynamic smem，V-split
+  grid=(1,192,1), block=128, 68,608 B。V-split 虽降低 shared memory，CTA
+  翻倍和计算 warp 减少仍使 recurrence 变慢。
+
+R11 的完整命令、失败布局、exactness 判据与判定见
+`../C1_R11_EXECUTION_SECTION.tex`。远端完整日志保存在 `results/r11_remote/`；
+大型 `.ncu-rep` 仍按 `.gitignore` 留在 B300 运行环境。

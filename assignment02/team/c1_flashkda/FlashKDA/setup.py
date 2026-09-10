@@ -61,6 +61,11 @@ def get_c1_compact_direct_storage_args():
     return ["-DC1_K2_COMPACT_DIRECT_STORAGE=1"] if is_flag_set("FLASH_KDA_C1_COMPACT_DIRECT_STORAGE") else []
 
 
+def get_c1_tma_swizzled_output_args():
+    """Enable the R11-B swizzled shared-memory/TMA output probe."""
+    return ["-DC1_K2_TMA_SWIZZLED_OUTPUT=1"] if is_flag_set("FLASH_KDA_C1_TMA_SWIZZLED_OUTPUT") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -133,6 +138,7 @@ ext_modules = [
                 *get_c1_direct_output_args(),
                 *get_c1_direct_output_vec_args(),
                 *get_c1_compact_direct_storage_args(),
+                *get_c1_tma_swizzled_output_args(),
             ],
         },
     )

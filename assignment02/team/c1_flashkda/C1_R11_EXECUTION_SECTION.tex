@@ -1,0 +1,247 @@
+\section{R11：共享存储、TMA swizzle 与固定开销诊断}
+
+\subsection{轮次目标、环境与判定口径}
+
+R10 的 direct-store 结果表明，显式 fragment 到 global 的映射可以做到 exact，
+但在完整 non-split K2 上增加了寄存器和地址计算，不能超过默认路径。R11 不再
+继续叠加普通 global store，而是拆成三条相互独立的实验线：
+
+\begin{enumerate}
+  \item A：删除 direct-output 专用 output ring，检查 union 中的 shared-memory
+        预留是否真的能下降；
+  \item B：使用 CUTLASS/CuTe 的 128-byte shared-memory swizzle，使 output
+        tile 可以由匹配的 SM90 TMA store 写回；
+  \item C：用 CUDA event、NCU 和 Nsight Systems 将长序列性能拆成 prepare、
+        recurrence、写回以及 CTA/流水线开销，避免把单一 DRAM 指标当成瓶颈结论。
+\end{enumerate}
+
+本轮所有正式数据来自同一台 B300（\code{NVIDIA B300 SXM6 AC}，CUDA 12.9，
+PyTorch 2.13.0+cu129，SM103a）。benchmark 的固定问题为
+\(T=8192,H=96,D=128\)，BF16 state；性能以同一 Python API 和 CUDA events
+测量，warmup/iterations/repeats 在日志中保留。R11 的实验开关全部是 build-time
+opt-in，默认编译不改变 R10 路径。
+
+\subsection{R11-A：删除 output ring 的实际效果}
+
+\paragraph{设计。}
+在 \code{SharedStorageK2} 中，direct-output 路径并不读取 output ring，
+因此新增 \code{C1\_K2\_COMPACT\_DIRECT\_STORAGE}，让
+\code{OutputStorage::out} 只在需要 shared output pipeline 时保留。该改动不
+改变线程映射和 global 地址，只检验资源 union 的下界。开关默认为关闭：
+
+\begin{lstlisting}
+FLASH_KDA_C1_DIRECT_OUTPUT=1
+FLASH_KDA_C1_DIRECT_OUTPUT_VEC=1
+FLASH_KDA_C1_COMPACT_DIRECT_STORAGE=1
+\end{lstlisting}
+
+正确性覆盖了 \(T=16,17,64,97\)、\(H=1,4,96\)、BF16/FP32 state、state
+in/out、varlen 以及 \(B=2\)。所有 output 和 final state 均逐 bit exact。
+在固定 \([8192,96,128]\) 上，compact direct 与同源 control 的 V-split
+结果约为 2.017 ms 对 2.017 ms，非 split compact 约 1.67 ms；重复测量不
+显示可复现的收益。
+
+NCU launch statistics 仍显示 dynamic shared memory 为 64,640 B（配置值
+65,664 B）。原因是 shared-storage union 的峰值由 state/input 或其他成员
+主导，删除 output ring 没有改变实际 launch 资源。因此 A 的判定是“代码和
+正确性成立，但资源下界不由 output ring 决定”，不接入默认构建。详细结果在
+\code{results/r11\_a\_SUMMARY.md} 及其同轮日志中。
+
+\subsection{R11-B：从 standalone swizzle 到完整 K2}
+
+\subsubsection{CuTe layout 的独立验证}
+
+官方示例的关键约束是 TMA descriptor 的 major/global unit-stride mode 必须与
+shared tile 的逻辑方向一致。首先编写 \code{r11\_tma\_swizzle\_probe.cu}，
+以 \(32\times64\) BF16 tile 测试
+\code{Swizzle<3,4,3>}，并显式使用 grid-constant descriptor：
+
+\begin{lstlisting}
+template<class TmaStore>
+__global__ void kernel(CUTE_GRID_CONSTANT TmaStore const tma_store) { ... }
+\end{lstlisting}
+
+未使用 \code{CUTE\_GRID\_CONSTANT} 时，descriptor 在 device 上被错误地按
+普通 kernel 参数处理，probe 出现 illegal memory access。修正后 B300 job
+24689 输出：
+
+\begin{lstlisting}
+logical smem: Sw<3,4,3> ... ((_32,_4),_16):((_1,_512),_32)
+tma smem:     Sw<3,4,3> ... (_1,(_32,_4),_16):(_0,(_1,_512),_32)
+R11-B swizzled TMA store: mismatches=0 total=2048 cosize=2048 bytes=4096
+\end{lstlisting}
+
+这一步证明 128-byte swizzle 与 TMA store 的组合本身可在 B300 exact 运行。
+
+随后用真实 K2 的 \([\text{CHUNK},D]=[16,128]\) 形状直接套用 swizzle。
+job 24702 发生 illegal memory access，说明不能仅把原有 row-major 的
+\([\text{token},\text{value}]) 逻辑 layout 替换为 swizzle。最终采用与 TMA
+major mode 一致的 \([D,\text{CHUNK}]=[128,16]\) shared 逻辑 tile，保留
+物理 output pointer 不变，只在 launch 中增加一个 \([H,D,T]\)、stride
+\((D,1,DH)\) 的 gmem view。
+
+\subsubsection{完整 K2 的实现}
+
+\code{K2Layouts} 新增 full 和 value-split 两套布局：
+
+\begin{lstlisting}
+SwizzledOutputLayout = ComposedLayout<Swizzle<3,4,3>, ...>
+SwizzledValueSliceLayout = ComposedLayout<Swizzle<3,4,3>, ...>
+TMAFullSwizzledOutputLayout
+TMASwizzledValueSliceOutputLayout
+\end{lstlisting}
+
+MMA warp 的 16x16 fragment 使用 R9/R10 已验证的逆映射写入 swizzled shared
+tile。完整 tile 通过匹配的 TMA store 写回；尾部 \(\text{actual\_len}<16\)
+不能缩短 TMA transaction，因此保留 scalar bounded tail。swizzled TMA
+descriptor 被加入 kernel 参数，但只有 \code{C1\_K2\_TMA\_SWIZZLED\_OUTPUT=1}
+时才实例化实际输出分支。该开关由 \code{setup.py} 转为
+\code{-DC1\_K2\_TMA\_SWIZZLED\_OUTPUT=1}，默认环境不设置它。
+
+集成构建命令为：
+
+\begin{lstlisting}
+cd <B300_REPO>/assignment02/team/c1_flashkda/FlashKDA
+FLASH_KDA_CUDA_ARCHS=103a \\
+FLASH_KDA_C1_TMA_SWIZZLED_OUTPUT=1 \\
+FLASH_KDA_C1_COMPACT_DIRECT_STORAGE=0 \\
+FLASH_KDA_C1_DIRECT_OUTPUT=0 \\
+FLASH_KDA_C1_DIRECT_OUTPUT_VEC=0 \\
+../../../.venv/bin/python setup.py build_ext --inplace
+\end{lstlisting}
+
+首次构建 job 24739 仅因错误使用 \code{../../.venv/bin/python} 失败；使用
+\code{../../../.venv/bin/python} 后 job 24746 成功。ptxas 没有报告 spill，
+相关 recurrence 实例的 register 数仍在 66--77/thread 范围。
+
+\subsubsection{集成 exactness}
+
+由于 Slurm batch shell 默认没有把 venv 的 ninja 加入 PATH，第一次 exactness
+提交只记录了 PyTorch JIT 的环境失败。显式设置
+\code{PATH=<assignment02>/.venv/bin:\$PATH} 后，job 24758 完成两组测试：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r r}
+\toprule
+测试集 & cases & output diff & state diff & 覆盖范围 \\
+\midrule
+native smoke & 5 & 0 & 0 & T=16/17/64, H=1/96, state I/O \\
+extended smoke & 5 & 0 & 0 & T=97, varlen, B=2, H=4/96, BF16/FP32 \\
+\bottomrule
+\end{tabular}
+\caption{R11-B swizzled TMA 完整 K2 的 exactness。}
+\end{table}
+
+这证明 swizzled shared layout、full-tile TMA、tail scalar fallback 和
+value-split 分支在已覆盖输入上保持 output/final-state 位级一致；但它不等价
+于性能收益。
+
+\subsubsection{同源性能对比}
+
+先以 \code{C1\_K2\_TMA\_SWIZZLED\_OUTPUT=0} 重建 baseline（job 24761），
+再以开关为 1 重建 swizzled 版本（job 24768）。两者均清理 build 和旧
+\code{flash\_kda\_C*.so}，并使用相同 benchmark：warmup=20、iters=50、
+repeats=3。
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+variant & BF16 state (ms) & no state (ms) & FP32 state (ms) \\
+\midrule
+same-source baseline & 1.0272 & 1.0285 & 0.9977 \\
+swizzled TMA & 1.7623 & 1.7615 & 1.7104 \\
+\midrule
+relative change & +71.6\% & +71.2\% & +71.4\% \\
+\bottomrule
+\end{tabular}
+\caption{B300，固定 \([8192,96,128]\) 的同源 CUDA-event benchmark。}
+\end{table}
+
+为了检查是否只有大 head 数退化，另做 warmup=10、iters=30、repeats=2 的
+H=1/4 对照。H=1 的 BF16 state 为 baseline 0.7329 ms、swizzled 0.7332 ms；
+H=4 为 0.7479 ms、0.7480 ms。小 H 几乎没有变化，说明这些实例没有触发
+完整的高并行 swizzled output 代价；H=96 才暴露出该路径的主要问题。
+
+\begin{decision}{R11-B 判定}
+128-byte swizzle + TMA store 在独立 probe 和完整 K2 上均可 exact，但当前
+实现将 output fragment 额外 materialize 到 shared tile，再等待 TMA store
+完成；对 H=96 增加约 72\% 端到端延迟。它不能替代默认路径，保留为显式
+\code{C1\_K2\_TMA\_SWIZZLED\_OUTPUT} 负结果/后续优化基线。下一次若重访，
+必须消除额外 materialization 或把它与 MMA/producer pipeline 融合，而不是
+继续调整 swizzle 参数。
+\end{decision}
+
+\subsection{R11-C：固定开销与 CTA 形态诊断}
+
+\subsubsection{测量方法}
+
+\code{r11\_c\_overhead\_probe.py} 使用 public \code{flash\_kda.fwd} API，
+CUDA event 包住一次 prepare+recurrence；CPU allocation 与 Python dispatch
+不计入 GPU event。NCU basic set 收集 grid/block、register、dynamic shared
+memory、active warps 和 DRAM bytes；Nsight Systems 记录短序列和长序列的
+kernel 时间。NCU replay 时间只用于结构观察，不参与正式性能排序。
+
+\subsubsection{H=96 的 V-split 结构}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l c c c c}
+\toprule
+variant & grid & block & dynamic smem & registers/thread \\
+\midrule
+baseline & (1,96,1) & 192 & 98,432 B & 66--74 \\
+V-split & (1,192,1) & 128 & 68,608 B & 78--82 \\
+\bottomrule
+\end{tabular}
+\caption{R11-C NCU launch statistics，H=96。}
+\end{table}
+
+V-split 把 CTA 数量翻倍、每个 CTA 的计算 warp 数减少；虽然 dynamic shared
+memory 下降约 30\%，其 recurrence kernel 反而从约 1.24--1.29 ms 增至
+1.56--1.58 ms。完整 API 的 T=8192 CUDA-event 结果如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+H & baseline (ms) & V-split (ms) & V-split change \\
+\midrule
+1 & 1.2680 & 1.1094 & -12.5\% \\
+4 & 1.2916 & 1.1518 & -10.8\% \\
+96 & 1.7582 & 2.0066 & +14.1\% \\
+\bottomrule
+\end{tabular}
+\caption{R11-C 同一 B300 环境的正式 CUDA-event 对照。}
+\end{table}
+
+H=96 的 NCU DRAM throughput 在 V-split 中更高，但端到端更慢，因而不能把
+“DRAM read/write 较少”直接解释为总延迟瓶颈已经被解决。Nsight Systems 还
+显示 T=16 时总 GPU 时间只有约 30--60\(\mu\)s，固定 launch、barrier 和
+pipeline 成本占比显著；varlen 的加速主要来自多个 sequence CTA 并行，关键
+路径接近最长 sequence，而不是简单按总 token 数缩放。
+
+\subsection{R11 总结与下一轮边界}
+
+本轮得到三个可复核结论：
+
+\begin{enumerate}
+  \item 删除 direct-output ring 没有降低实际 dynamic shared memory，说明
+        union 峰值由其他 storage 主导；
+  \item swizzled shared/TMA store 已从独立 probe 迁移到真实 K2 并通过完整
+        exactness，但 H=96 慢约 72\%，因此只能保留为 opt-in 负结果；
+  \item V-split 的资源节省与端到端收益不单调，H=1/4 有约 11--13\% 收益，
+        H=96 却慢约 14\%，主要矛盾是 CTA/warp 形态而非单一 DRAM 计数器。
+\end{enumerate}
+
+R11 不改变默认构建：\code{C1\_K2\_TMA\_SWIZZLED\_OUTPUT}、
+\code{C1\_K2\_COMPACT\_DIRECT\_STORAGE} 和 R10 direct 开关均保持关闭。
+后续优化若继续，应优先研究 H=96 的 CTA 融合/warp-specialized epilogue 与
+真实 output-storage 生命周期；不应把当前 swizzled materialization 直接
+接入默认路径，也不应仅凭 shared-memory 或 DRAM 指标宣称已达到题目目标。
+

@@ -47,6 +47,12 @@
 #define C1_K2_COMPACT_DIRECT_STORAGE 0
 #endif
 
+// R11-B probe: use a 128-byte-swizzled shared-memory output tile followed by
+// a matching TMA store.  This is opt-in; the default/R10 paths are unchanged.
+#ifndef C1_K2_TMA_SWIZZLED_OUTPUT
+#define C1_K2_TMA_SWIZZLED_OUTPUT 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -98,6 +104,35 @@ struct K2Layouts {
         ValueSliceVOLayout{}.layout_a(),
         ValueSliceVOLayout{}.offset(),
         prepend(ValueSliceVOLayout{}.layout_b())
+    ));
+
+    // The TMA descriptor uses the unit-stride value dimension as its first
+    // global-memory mode.  The shared tile is therefore logically [D,CHUNK]
+    // and uses the SM90 128-byte epilogue swizzle.  For value-split CTAs the
+    // same construction is instantiated with D/2.
+    using SwizzledOutputPreLayout = Layout<
+        Shape<Shape<Int<D / 4>, Int<4>>, Int<CHUNK>>,
+        Stride<Stride<Int<1>, Int<D * CHUNK / 4>>, Int<D / 4>>>;
+    using SwizzledOutputLayout = ComposedLayout<
+        Swizzle<3, 4, 3>,
+        smem_ptr_flag_bits<sizeof_bits<cute::bfloat16_t>::value>,
+        SwizzledOutputPreLayout>;
+    using TMAFullSwizzledOutputLayout = decltype(composition(
+        SwizzledOutputLayout{}.layout_a(),
+        SwizzledOutputLayout{}.offset(),
+        prepend(SwizzledOutputLayout{}.layout_b())
+    ));
+    using SwizzledValueSlicePreLayout = Layout<
+        Shape<Shape<Int<kValueSliceD / 4>, Int<4>>, Int<CHUNK>>,
+        Stride<Stride<Int<1>, Int<kValueSliceD * CHUNK / 4>>, Int<kValueSliceD / 4>>>;
+    using SwizzledValueSliceLayout = ComposedLayout<
+        Swizzle<3, 4, 3>,
+        smem_ptr_flag_bits<sizeof_bits<cute::bfloat16_t>::value>,
+        SwizzledValueSlicePreLayout>;
+    using TMASwizzledValueSliceOutputLayout = decltype(composition(
+        SwizzledValueSliceLayout{}.layout_a(),
+        SwizzledValueSliceLayout{}.offset(),
+        prepend(SwizzledValueSliceLayout{}.layout_b())
     ));
     using TMAStateSmemLayout = decltype(composition(
         StateSmemLayout{}.layout_a(),
@@ -164,6 +199,9 @@ struct SharedStorageK2 {
         ValueSplit, typename Layouts::ValueSliceVOLayout, VOLayout>;
     using ValueStateSmemLayout = std::conditional_t<
         ValueSplit, typename Layouts::ValueSliceStateSmemLayout, StateSmemLayout>;
+    using ValueOutputLayout = std::conditional_t<
+        ValueSplit, typename Layouts::SwizzledValueSliceLayout,
+        typename Layouts::SwizzledOutputLayout>;
 
     alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<ValueStateSmemLayout>> state_acc;
 
@@ -179,7 +217,9 @@ struct SharedStorageK2 {
     };
 
     struct OutputStorage {
-        alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<ValueVOLayout>> out;
+        using StorageLayout = std::conditional_t<
+            (C1_K2_TMA_SWIZZLED_OUTPUT != 0), ValueOutputLayout, ValueVOLayout>;
+        alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<StorageLayout>> out;
     };
 
     // Direct output writes the completed fragment from the MMA warp straight
@@ -229,6 +269,8 @@ template <
     class TmaStoreStateSlice,
     class TmaStoreOut,
     class TmaStoreOutSlice,
+    class TmaStoreOutSwizzled,
+    class TmaStoreOutSwizzledSlice,
     int CHUNK,
     int D,
     int InputStages,
@@ -256,6 +298,8 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     CUTE_GRID_CONSTANT TmaStoreStateSlice const tma_store_final_state_slice,
     CUTE_GRID_CONSTANT TmaStoreOut const tma_store_out,
     CUTE_GRID_CONSTANT TmaStoreOutSlice const tma_store_out_slice,
+    CUTE_GRID_CONSTANT TmaStoreOutSwizzled const tma_store_out_swizzled,
+    CUTE_GRID_CONSTANT TmaStoreOutSwizzledSlice const tma_store_out_swizzled_slice,
     cutlass::bfloat16_t* out_raw_ptr,
     void* final_state_raw_ptr,
     int T_total,
@@ -284,6 +328,10 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     using TMAValueSliceStateSmemLayout = typename Layouts::TMAValueSliceStateSmemLayout;
     using ValueSliceVOLayout = typename Layouts::ValueSliceVOLayout;
     using TMAValueSliceVOLayout = typename Layouts::TMAValueSliceVOLayout;
+    using SwizzledOutputLayout = typename Layouts::SwizzledOutputLayout;
+    using SwizzledValueSliceLayout = typename Layouts::SwizzledValueSliceLayout;
+    using TMAFullSwizzledOutputLayout = typename Layouts::TMAFullSwizzledOutputLayout;
+    using TMASwizzledValueSliceOutputLayout = typename Layouts::TMASwizzledValueSliceOutputLayout;
     using FP32StateSmemLayout = typename Layouts::FP32StateSmemLayout;
     using TMAFP32StateSmemLayout = typename Layouts::TMAFP32StateSmemLayout;
     using FP32ValueSliceStateSmemLayout = typename Layouts::FP32ValueSliceStateSmemLayout;
@@ -301,6 +349,9 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr bool kFuseOutAdd = C1_K2_FUSE_OUT_ADD != 0;
     constexpr bool kDirectOutput = C1_K2_DIRECT_OUTPUT != 0;
     constexpr bool kDirectOutputVec = C1_K2_DIRECT_OUTPUT_VEC != 0;
+    constexpr bool kTmaSwizzledOutput = C1_K2_TMA_SWIZZLED_OUTPUT != 0;
+    static_assert(!(kTmaSwizzledOutput && kDirectOutput),
+                  "R11-B swizzled TMA and R10 direct output are exclusive");
 
     // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
     constexpr uint32_t kValueTmaElements = ValueSplit
@@ -870,7 +921,33 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             // K2, but no output tile is written to shared memory and no STORE
             // warp output transaction is issued.  State update remains below.
             if constexpr (!kStateOnly) {
-                if constexpr (kDirectOutput) {
+                if constexpr (kTmaSwizzledOutput) {
+                    // R11-B: materialize the register fragment into the
+                    // swizzled [value,token] tile consumed by the matching
+                    // TMA descriptor.  The fragment inverse map is the same
+                    // exact map audited by R9/R10; only the destination view
+                    // changes from row-major output to the swizzled SMEM view.
+                    Tensor swizzled_out = make_tensor(
+                        make_smem_ptr(shared_storage.output[out_stage].out.begin()),
+                        std::conditional_t<ValueSplit, SwizzledValueSliceLayout,
+                                           SwizzledOutputLayout>{});
+                    #pragma unroll
+                    for (int i = 0; i < 2; ++i) {
+                        auto src = smem_thr_store_C.retile_S(out_bf16[i]);
+                        #pragma unroll
+                        for (int j = 0; j < size(src); ++j) {
+                            auto src_coord = idx2crd(j, shape(src));
+                            const int row = (lane_id / 4) + (((j / 2) & 1) * 8);
+                            const int local_col = ((j / 4) * 8) +
+                                ((lane_id & 3) * 2) + (j & 1);
+                            const int tile_col = (warp_id * 2 + i) * 16 + local_col;
+                            const int col = ValueSplit
+                                ? value_slice_idx * (D / 2) + tile_col
+                                : tile_col;
+                            swizzled_out(col, row) = src(src_coord);
+                        }
+                    }
+                } else if constexpr (kDirectOutput) {
                     // R9 established the exact inverse of the K_INTER C-copy
                     // map for each 16x16 block.  Keep this first production
                     // version scalar: correctness and address ownership are
@@ -1036,7 +1113,45 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
             BF16* out_stage_ptr = shared_storage.output[stage].out.begin();
 
-            if constexpr (ValueSplit) {
+            if constexpr (kTmaSwizzledOutput) {
+                using SwizzledOutLayout = std::conditional_t<
+                    ValueSplit, SwizzledValueSliceLayout, SwizzledOutputLayout>;
+                if (actual_len < CHUNK) {
+                    // TMA cannot shorten a tile.  Read the swizzled SMEM
+                    // view scalarly for the one partial tile.
+                    Tensor s_out = make_tensor(make_smem_ptr(out_stage_ptr), SwizzledOutLayout{});
+                    int value_begin = ValueSplit ? value_slice_idx * (D / 2) : 0;
+                    int value_width = ValueSplit ? D / 2 : D;
+                    for (int row = 0; row < actual_len; ++row) {
+                        int64_t global_base = (bos + t * CHUNK + row) * H * D + head_idx * D;
+                        for (int col = 0; col < value_width; ++col) {
+                            out_raw_ptr[global_base + value_begin + col] = s_out(value_begin + col, row);
+                        }
+                    }
+                } else if constexpr (ValueSplit) {
+                    Tensor g_out = tma_store_out_swizzled_slice.get_tma_tensor(make_shape(H, D, T_total));
+                    auto out_off = g_out.layout()(head_idx, value_slice_idx * (D / 2), int(bos) + t * CHUNK);
+                    Tensor g_out_tile = make_tensor(g_out.data() + out_off,
+                        make_layout(make_shape(Int<1>{}, Int<D / 2>{}, Int<CHUNK>{}), stride(g_out.layout())));
+                    Tensor s_out_tile = make_tensor(make_smem_ptr(out_stage_ptr), TMASwizzledValueSliceOutputLayout{});
+                    auto cta_tma_store = tma_store_out_swizzled_slice.get_slice(Int<0>{});
+                    cute::copy(tma_store_out_swizzled_slice,
+                               cta_tma_store.partition_S(s_out_tile),
+                               cta_tma_store.partition_D(g_out_tile));
+                    tma_store_arrive();
+                } else {
+                    Tensor g_out = tma_store_out_swizzled.get_tma_tensor(make_shape(H, D, T_total));
+                    auto out_off = g_out.layout()(head_idx, 0, int(bos) + t * CHUNK);
+                    Tensor g_out_tile = make_tensor(g_out.data() + out_off,
+                        make_layout(make_shape(Int<1>{}, Int<D>{}, Int<CHUNK>{}), stride(g_out.layout())));
+                    Tensor s_out_tile = make_tensor(make_smem_ptr(out_stage_ptr), TMAFullSwizzledOutputLayout{});
+                    auto cta_tma_store = tma_store_out_swizzled.get_slice(Int<0>{});
+                    cute::copy(tma_store_out_swizzled,
+                               cta_tma_store.partition_S(s_out_tile),
+                               cta_tma_store.partition_D(g_out_tile));
+                    tma_store_arrive();
+                }
+            } else if constexpr (ValueSplit) {
                 if (actual_len < CHUNK) {
                     // A TMA tile cannot be shortened.  The tail has no valid
                     // neighbouring sequence columns, so retain a bounded
