@@ -87,6 +87,7 @@ git，使用 \code{/home/lcpu/<user>/<repo>} 和环境变量占位符。
 第一轮 & 环境、基线、指令/数值探针和 tcgen05 可行性 & 已完成并冻结为里程碑 \\
 第二轮--R10 & 5090 诊断、K2 并行度、state/output epilogue 与 direct map prototype & 已完成 \\
 R11 & shared storage、swizzled TMA、CTA/固定开销诊断 & 已完成；负结果封存 \\
+R12 & output-stage 消融与 fused TMA epilogue & 已完成；未达到接入门槛 \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -2034,4 +2035,5 @@ warp-specialized 的 2SM epilogue，或在完整 K2 上做一次仅替换 MMA/�
 \input{C1_R9_EXECUTION_SECTION.tex}
 \input{C1_R10_EXECUTION_SECTION.tex}
 \input{C1_R11_EXECUTION_SECTION.tex}
+\input{C1_R12_EXECUTION_SECTION.tex}
 \end{document}

@@ -53,6 +53,13 @@
 #define C1_K2_TMA_SWIZZLED_OUTPUT 0
 #endif
 
+// R12-B probe: use the existing CuTe STSM_N atom to write directly into the
+// TMA-compatible swizzled tile.  This is deliberately separate from the R11
+// scalar inverse-map path, so either candidate can be benchmarked independently.
+#ifndef C1_K2_FUSED_TMA_EPILOGUE
+#define C1_K2_FUSED_TMA_EPILOGUE 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -218,7 +225,8 @@ struct SharedStorageK2 {
 
     struct OutputStorage {
         using StorageLayout = std::conditional_t<
-            (C1_K2_TMA_SWIZZLED_OUTPUT != 0), ValueOutputLayout, ValueVOLayout>;
+            ((C1_K2_TMA_SWIZZLED_OUTPUT != 0) || (C1_K2_FUSED_TMA_EPILOGUE != 0)),
+            ValueOutputLayout, ValueVOLayout>;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<StorageLayout>> out;
     };
 
@@ -349,9 +357,10 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr bool kFuseOutAdd = C1_K2_FUSE_OUT_ADD != 0;
     constexpr bool kDirectOutput = C1_K2_DIRECT_OUTPUT != 0;
     constexpr bool kDirectOutputVec = C1_K2_DIRECT_OUTPUT_VEC != 0;
-    constexpr bool kTmaSwizzledOutput = C1_K2_TMA_SWIZZLED_OUTPUT != 0;
+    constexpr bool kFusedTmaEpilogue = C1_K2_FUSED_TMA_EPILOGUE != 0;
+    constexpr bool kTmaSwizzledOutput = (C1_K2_TMA_SWIZZLED_OUTPUT != 0) || kFusedTmaEpilogue;
     static_assert(!(kTmaSwizzledOutput && kDirectOutput),
-                  "R11-B swizzled TMA and R10 direct output are exclusive");
+                  "R11/R12 swizzled TMA and R10 direct output are exclusive");
 
     // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
     constexpr uint32_t kValueTmaElements = ValueSplit
@@ -921,7 +930,25 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             // K2, but no output tile is written to shared memory and no STORE
             // warp output transaction is issued.  State update remains below.
             if constexpr (!kStateOnly) {
-                if constexpr (kTmaSwizzledOutput) {
+                if constexpr (kFusedTmaEpilogue) {
+                    // R12-B: use the hardware STSM_N copy atom directly. The
+                    // destination is logically [value,token], matching the
+                    // swizzled TMA source layout; no scalar inverse-map loop
+                    // or intermediate row-major tile is emitted.
+                    Tensor fused_out = make_tensor(
+                        make_smem_ptr(shared_storage.output[out_stage].out.begin()),
+                        std::conditional_t<ValueSplit, SwizzledValueSliceLayout,
+                                           SwizzledOutputLayout>{});
+                    #pragma unroll
+                    for (int i = 0; i < 2; ++i) {
+                        auto out_block = local_tile(
+                            fused_out, make_shape(Int<16>{}, Int<16>{}),
+                            make_coord(warp_id * 2 + i, 0));
+                        copy(smem_tiled_store_C,
+                             smem_thr_store_C.retile_S(out_bf16[i]),
+                             smem_thr_store_C.partition_D(out_block));
+                    }
+                } else if constexpr (kTmaSwizzledOutput) {
                     // R11-B: materialize the register fragment into the
                     // swizzled [value,token] tile consumed by the matching
                     // TMA descriptor.  The fragment inverse map is the same

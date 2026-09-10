@@ -255,3 +255,26 @@ pair-packed direct 对 V-split 有明显局部收益，但 non-split default 仍
 R11 的完整命令、失败布局、exactness 判据与判定见
 `../C1_R11_EXECUTION_SECTION.tex`。远端完整日志保存在 `results/r11_remote/`；
 大型 `.ncu-rep` 仍按 `.gitignore` 留在 B300 运行环境。
+
+## R12：output 消融与 fused TMA epilogue
+
+- `r12_remote/r12_state_*`、`r12_remote/r12_full_*`：paired full/state-only
+  探针。H=96、T=8192 的同一探针中，full 约 1.785 ms，state-only 约
+  1.532 ms，output 相关阶段约占 14.2%；短 T=16 的差值只有约 1.7 us。
+- `r12_remote/r12_stage1_bench_24835.log`、
+  `r12_remote/r12_stage3_bench_24829.log`：output pipeline stage 消融。
+  stage=1 的 BF16-state 为 1.1229 ms，stage=3 为 1.0294 ms；stage=2
+  baseline 为 1.0272 ms。stage=1 稳定变慢，stage=3 没有可复现收益。
+- `r12_remote/r12_fused_build_24870.log`、
+  `r12_remote/r12_fused_smoke_24875.log`、
+  `r12_remote/r12_fused_bench_24880.log`：R12-B
+  `C1_K2_FUSED_TMA_EPILOGUE`。使用 `SM90_U32x4_STSM_N` 直接写
+  swizzled shared tile；10 个基础/扩展 case 全部 exact。H=96 benchmark
+  BF16/no-state/FP32 为 1.0287/1.0283/0.9978 ms，与 baseline 持平，未达
+  10% 接入门槛。
+- `r12_remote/r12_restore_*`：关闭 R12 开关后的默认 baseline 恢复与扩展
+  exactness 回归，所有 output/state difference=0。
+
+R12 的完整命令、stage 噪声辨析、fused layout 实现和判定见
+`../C1_R12_EXECUTION_SECTION.tex`。R12 fused 路径保留为 opt-in 参考，不进入
+默认构建。

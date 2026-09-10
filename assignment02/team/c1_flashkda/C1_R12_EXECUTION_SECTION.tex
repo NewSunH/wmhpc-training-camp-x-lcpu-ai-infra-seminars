@@ -1,0 +1,142 @@
+\section{R12：output 阶段消融与 fused TMA epilogue}
+
+\subsection{目标、环境与实验纪律}
+
+R11 的结论是：H=96 的 V-split 会因 CTA 数量翻倍而变慢，R11-B 的
+``fragment\textrightarrow{}swizzled shared\textrightarrow{}TMA'' 路径虽然 exact，
+却比 baseline 慢约 72\%。R12 因此只回答两个问题：
+
+\begin{enumerate}
+  \item output epilogue 在当前完整 K2 中是否仍占有足够大的延迟比例；
+  \item 能否去掉 R11 scalar inverse-map loop，让已有的 STSM\_N atom 直接
+        写入 TMA-compatible tile。
+\end{enumerate}
+
+实验仍在同一 B300/SM103a 环境进行（CUDA 12.9，PyTorch 2.13.0+cu129，
+\(T=8192,H=96,D=128\)）。所有变体均用 build-time opt-in，默认路径在最后
+恢复并回归。正式 benchmark 使用 \code{bench\_fwd.py} 的 CUDA events，
+warmup=20、iters=50、repeats=3；r7 探针只用于同一进程内的 full/state-only
+分解，不能把不同 Slurm 作业的绝对时间直接混用。
+
+\subsection{R12-A：full/state-only 与 output stage 消融}
+
+\subsubsection{state-only 分解}
+
+使用既有 \code{r7\_state\_only\_probe.py}，先编译
+\code{FLASH\_KDA\_C1\_STATE\_ONLY=1}，再编译默认 full binary。两者均
+保留 recurrence 和 final-state store，唯一差异是 full 版本执行 output
+pipeline/materialization/store。命令形式为：
+
+\begin{lstlisting}
+FLASH_KDA_CUDA_ARCHS=103a \\
+FLASH_KDA_C1_STATE_ONLY=1 \\
+FLASH_KDA_C1_OUTPUT_STAGES=2 \\
+../../../.venv/bin/python setup.py build_ext --inplace
+
+python challenge/r7_state_only_probe.py \\
+  --T 8192 --H 96 --seed 2027 --warmup 20 --iters 50
+\end{lstlisting}
+
+在同一探针作业内，H=96、T=8192 的 full 中位数为约 1.785 ms，state-only
+约 1.532 ms，差值约 0.253 ms（约 14.2\%）。T=16,H=96 的差值约 1.7\(\mu\)s，
+与短问题中固定 launch/pipeline 成本占主导的判断一致。state-only 的 output
+故意保持为零；final state 与 reference 均逐 bit exact。
+
+不同 Slurm 作业的 GPU 时钟和背景负载变化较大，因此另外的
+\code{bench\_fwd.py} state-only 绝对值只作为辅助记录，不用于声称比 full
+快多少；output 占比采用上述同一进程内的 paired probe。
+
+\subsubsection{output pipeline stage}
+
+在不改变 recurrence 或 layout 的前提下，分别构建
+\code{FLASH\_KDA\_C1\_OUTPUT\_STAGES=1,2,3}。stage=2 的同源 baseline
+来自 R11 job 24765，stage=1 和 stage=3 采用相同的 B300 benchmark 命令。
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+variant & BF16 state (ms) & no state (ms) & FP32 state (ms) \\
+\midrule
+stage=1 & 1.1229 & 1.0970 & 1.1208 \\
+stage=2 & 1.0272 & 1.0285 & 0.9977 \\
+stage=3 & 1.0294 & 1.0278 & 0.9999 \\
+\bottomrule
+\end{tabular}
+\caption{R12-A 固定 H96 benchmark；stage=2 为 R11 同源 baseline。}
+\end{table}
+
+stage=1 相对 stage=2 慢约 9.3\%（BF16 state）；stage=3 与 stage=2 差异约
+0.2\%，在重复探针中没有稳定优势。因此 output ring 的并行深度不能单独
+提供可复现的 10\% 加速，stage=3 也不接入默认。
+
+\subsection{R12-B：fused STSM-to-TMA epilogue}
+
+\subsubsection{实现假设}
+
+R11 scalar swizzled 分支在 Phase 5 中逐元素计算 row/column inverse map，
+再写入 \code{SwizzledOutputLayout}。R12 新增
+\code{C1\_K2\_FUSED\_TMA\_EPILOGUE}，改为让已有的
+\code{SM90\_U32x4\_STSM\_N} copy atom 直接写入相同的 swizzled shared
+layout：
+
+\begin{lstlisting}
+Tensor fused_out = make_tensor(shared_output, SwizzledOutputLayout{});
+auto out_block = local_tile(fused_out, make_shape(Int<16>{}, Int<16>{}),
+                            make_coord(warp_id * 2 + i, 0));
+copy(smem_tiled_store_C,
+     smem_thr_store_C.retile_S(out_bf16[i]),
+     smem_thr_store_C.partition_D(out_block));
+\end{lstlisting}
+
+该分支复用 R11 的 swizzled TMA descriptor 和 tail scalar fallback，不处理
+direct output，也不改变 V-split 的默认选择。\code{setup.py} 将开关映射为
+\code{-DC1\_K2\_FUSED\_TMA\_EPILOGUE=1}；默认值为 0。
+
+\subsubsection{编译与正确性}
+
+构建命令如下：
+
+\begin{lstlisting}
+FLASH_KDA_CUDA_ARCHS=103a \\
+FLASH_KDA_C1_FUSED_TMA_EPILOGUE=1 \\
+FLASH_KDA_C1_TMA_SWIZZLED_OUTPUT=0 \\
+FLASH_KDA_C1_STATE_ONLY=0 \\
+FLASH_KDA_C1_OUTPUT_STAGES=2 \\
+../../../.venv/bin/python setup.py build_ext --inplace
+\end{lstlisting}
+
+job 24870 编译成功且无 spill。job 24875 的基础 smoke 与 extended smoke
+均通过：共 10 个 case，覆盖 H=96、T=16/17/64/97、tail、varlen、B=2、
+BF16/FP32 state 以及 state in/out；所有 output 和 final-state
+\code{different} 均为 0。说明 STSM atom 对 swizzled shared tile 的写入
+映射与 TMA store 语义一致。
+
+\subsubsection{性能与资源}
+
+R12 fused benchmark（job 24880）为：BF16 state 1.0287 ms、no-state
+1.0283 ms、FP32 state 0.9978 ms。R11 同源 baseline 为 1.0272、1.0285、
+0.9977 ms；BF16 state 相对变化约 +0.15\%，在测量噪声范围内。ptxas 对
+baseline 和 fused recurrence 实例报告相同的 66--77 registers/thread、
+9 barriers；fused 分支没有形成新的寄存器或 shared-memory 优势。
+
+\begin{decision}{R12-B 判定}
+fused STSM-to-TMA 方案解决了 R11 scalar inverse-map 的代码路径，并在完整
+exactness 上成立，但它与当前 baseline 的硬件资源形态等价，端到端没有可
+复现加速，更没有达到 10\% 接入门槛。因此只保留为 opt-in 参考实现，不进入
+默认构建；继续调节同一 STSM/TMA layout 的收益预期很低。
+\end{decision}
+
+\subsection{默认恢复与 R12-C 结论}
+
+实验结束后关闭所有 R12/R11 开关，job 24885 恢复默认 binary；job 24892
+扩展 exactness 回归的 5 个 case 全部 output/state exact。远端最终运行环境
+因此仍是默认 stage=2、非 state-only、非 swizzled、非 fused 的 baseline。
+
+R12-C 的流水线判断为：stage=1 明显不足，stage=3 仅持平，fused STSM
+没有改变资源形态；output 阶段虽然约占长序列延迟 14\%，但可优化空间不在
+单独的 TMA descriptor 或 swizzle 参数，而在更高层的 recurrence/epilogue
+重叠和 CTA 生命周期。下一轮若继续，应先做同一 CTA 内的 producer/consumer
+重叠或 prepare--recurrence 融合测量，不能把当前 fused 版本误认为性能优化。
+
