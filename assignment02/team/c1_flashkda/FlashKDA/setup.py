@@ -71,6 +71,11 @@ def get_c1_fused_tma_epilogue_args():
     return ["-DC1_K2_FUSED_TMA_EPILOGUE=1"] if is_flag_set("FLASH_KDA_C1_FUSED_TMA_EPILOGUE") else []
 
 
+def get_c1_fused_workspace_args():
+    """Enable the opt-in K1/K2 workspace-recompute fusion prototype."""
+    return ["-DC1_K1_K2_FUSED_WS=1"] if is_flag_set("FLASH_KDA_C1_FUSED_WS") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -145,6 +150,7 @@ ext_modules = [
                 *get_c1_compact_direct_storage_args(),
                 *get_c1_tma_swizzled_output_args(),
                 *get_c1_fused_tma_epilogue_args(),
+                *get_c1_fused_workspace_args(),
             ],
         },
     )

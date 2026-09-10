@@ -170,7 +170,7 @@ void launch_fwd(
           tma_store_final_state, tma_store_final_state_slice] = make_state_tma();
 
     // ===== Launch Kernel 1 (prepare) =====
-#if BLOCK_LEVEL_K1 >= 0
+#if BLOCK_LEVEL_K1 >= 0 && !C1_K1_K2_FUSED_WS
     {
         constexpr int kK1Threads = 256;
         using SharedStorageK1T = SharedStorageK1<K1L>;
@@ -209,7 +209,7 @@ void launch_fwd(
     // ===== Launch Kernel 2 (recurrence) =====
 #if BLOCK_LEVEL_K2 >= 0
     {
-#if C1_VSPLIT_K2
+#if C1_VSPLIT_K2 && !C1_K1_K2_FUSED_WS
         // C1 R4 prototype: two 64-value-column CTAs per head.  Each CTA owns
         // compact 16x64 V/output and 64x128 state tiles, which are also used
         // by the corresponding TMA descriptors.
@@ -218,6 +218,7 @@ void launch_fwd(
         int smem_size_k2 = sizeof(SharedStorageK2T);
 
         auto kernel2 = _flash_kda_fwd_recurrence<
+            decltype(tma_load_q), decltype(tma_load_k), decltype(tma_load_g),
             decltype(tma_load_v), decltype(tma_load_v_slice), decltype(tma_load_beta2),
             decltype(tma_load_ws_kd), decltype(tma_load_ws_qd), decltype(tma_load_ws_kr),
             decltype(tma_load_ws_gt), decltype(tma_load_ws_inv), decltype(tma_load_ws_mqk),
@@ -237,6 +238,7 @@ void launch_fwd(
         dim3 block_k2(kK2Threads);
 
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
+            tma_load_q, tma_load_k, tma_load_g,
             tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
             tma_load_ws_gt, tma_load_ws_inv, tma_load_ws_mqk,
@@ -246,7 +248,8 @@ void launch_fwd(
             tma_store_final_state_slice,
             tma_store_out, tma_store_out_slice,
             tma_store_out_swizzled, tma_store_out_swizzled_slice,
-            out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
+            out_ptr, final_state_ptr, scale, A_log_ptr, dt_bias_ptr, gate_scale,
+            T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #else
         constexpr int kK2Threads = 32 * 2 + 128;
@@ -254,6 +257,7 @@ void launch_fwd(
         int smem_size_k2 = sizeof(SharedStorageK2T);
 
         auto kernel2 = _flash_kda_fwd_recurrence<
+            decltype(tma_load_q), decltype(tma_load_k), decltype(tma_load_g),
             decltype(tma_load_v), decltype(tma_load_v_slice), decltype(tma_load_beta2),
             decltype(tma_load_ws_kd), decltype(tma_load_ws_qd), decltype(tma_load_ws_kr),
             decltype(tma_load_ws_gt), decltype(tma_load_ws_inv), decltype(tma_load_ws_mqk),
@@ -273,6 +277,7 @@ void launch_fwd(
         dim3 block_k2(kK2Threads);
 
         kernel2<<<grid_k2, block_k2, smem_size_k2, stream>>>(
+            tma_load_q, tma_load_k, tma_load_g,
             tma_load_v, tma_load_v_slice, tma_load_beta2,
             tma_load_ws_kd, tma_load_ws_qd, tma_load_ws_kr,
             tma_load_ws_gt, tma_load_ws_inv, tma_load_ws_mqk,
@@ -282,7 +287,8 @@ void launch_fwd(
             tma_store_final_state_slice,
             tma_store_out, tma_store_out_slice,
             tma_store_out_swizzled, tma_store_out_swizzled_slice,
-            out_ptr, final_state_ptr, T_total, H, N, cu_seqlens_ptr, total_tiles
+            out_ptr, final_state_ptr, scale, A_log_ptr, dt_bias_ptr, gate_scale,
+            T_total, H, N, cu_seqlens_ptr, total_tiles
         );
 #endif
     }

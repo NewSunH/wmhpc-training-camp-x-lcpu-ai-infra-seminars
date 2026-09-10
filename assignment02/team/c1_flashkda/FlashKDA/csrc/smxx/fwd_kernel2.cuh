@@ -60,6 +60,15 @@
 #define C1_K2_FUSED_TMA_EPILOGUE 0
 #endif
 
+// C1 prototype: fuse K1's per-tile preparation into K2.  K2 recomputes the
+// six intermediates from q/k/g instead of reading K1's global workspace.  The
+// default remains the two-kernel implementation; this route is deliberately
+// restricted to the full (non-value-split) K2 until its resource/performance
+// trade-off is understood.
+#ifndef C1_K1_K2_FUSED_WS
+#define C1_K1_K2_FUSED_WS 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -218,9 +227,15 @@ struct SharedStorageK2 {
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> q_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_restored;
+        // K1's inverse-decay vector is needed only while forming L/Mqk.  It
+        // is a full [CHUNK,D] tile, so it cannot fit in the 16x16 INV tile.
+        alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_inv;
         alignas(128) cute::ArrayEngine<float, cute::cosize_v<GTotalLayout>> g_total;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> INV;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> Mqk;
+        // K1/K2 workspace-fusion temporary.  During fused preparation this
+        // holds L=K_decayed @ K_inv before being overwritten by the final INV.
+        alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> L;
     };
 
     struct OutputStorage {
@@ -266,6 +281,9 @@ struct SharedStorageK2 {
 
 // ==================== Kernel 2: Recurrence ====================
 template <
+    class TmaLoadQ,
+    class TmaLoadK,
+    class TmaLoadG,
     class TmaLoadV,
     class TmaLoadVSlice,
     class TmaLoadBeta,
@@ -291,6 +309,9 @@ template <
     bool ValueSplit = false
 >
 __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
+    CUTE_GRID_CONSTANT TmaLoadQ const tma_load_q,
+    CUTE_GRID_CONSTANT TmaLoadK const tma_load_k,
+    CUTE_GRID_CONSTANT TmaLoadG const tma_load_g,
     CUTE_GRID_CONSTANT TmaLoadV const tma_load_v,
     CUTE_GRID_CONSTANT TmaLoadVSlice const tma_load_v_slice,
     CUTE_GRID_CONSTANT TmaLoadBeta const tma_load_beta,
@@ -310,6 +331,10 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     CUTE_GRID_CONSTANT TmaStoreOutSwizzledSlice const tma_store_out_swizzled_slice,
     cutlass::bfloat16_t* out_raw_ptr,
     void* final_state_raw_ptr,
+    float scale,
+    float const* A_log_ptr,
+    float const* dt_bias_ptr,
+    float gate_scale,
     int T_total,
     int H,
     int N,
@@ -346,6 +371,12 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     using TMAFP32ValueSliceStateSmemLayout = typename Layouts::TMAFP32ValueSliceStateSmemLayout;
     using TMALMLayout = typename Layouts::TMALMLayout;
     using TMAGTotalSmemLayout = typename Layouts::TMAGTotalSmemLayout;
+    // Raw q/k/g tiles are loaded using K1's row-major TMA destination before
+    // their storage is reused as K2's MMA-interleaved intermediates.
+    using K1RawLayouts = K1Layouts<D, CHUNK>;
+    using QKLayout = typename K1RawLayouts::QKLayout;
+    using GLayout = typename K1RawLayouts::GLayout;
+    using TMAQKLayout = typename K1RawLayouts::TMAQKLayout;
     constexpr int kWarpSize = 32;
     // Baseline: 4 MMA warps + TMA load/store warps (192 threads).  The opt-in
     // prototype uses 2 MMA warps + TMA load/store warps (128 threads) and
@@ -359,10 +390,14 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
     constexpr bool kDirectOutputVec = C1_K2_DIRECT_OUTPUT_VEC != 0;
     constexpr bool kFusedTmaEpilogue = C1_K2_FUSED_TMA_EPILOGUE != 0;
     constexpr bool kTmaSwizzledOutput = (C1_K2_TMA_SWIZZLED_OUTPUT != 0) || kFusedTmaEpilogue;
+    constexpr bool kFusedWorkspace = C1_K1_K2_FUSED_WS != 0;
+    static_assert(!kFusedWorkspace || !ValueSplit,
+                  "K1/K2 fused workspace prototype currently supports full K2 only");
     static_assert(!(kTmaSwizzledOutput && kDirectOutput),
                   "R11/R12 swizzled TMA and R10 direct output are exclusive");
 
-    // Transaction bytes: v + beta + k_decayed + q_decayed + k_restored + g_total + INV + Mqk
+    // Transaction bytes: v + beta plus either six workspace intermediates or
+    // the three raw K1 inputs used by the fused recompute path.
     constexpr uint32_t kValueTmaElements = ValueSplit
         ? uint32_t(cute::cosize_v<ValueSliceVOLayout>)
         : uint32_t(cute::cosize_v<VOLayout>);
@@ -370,9 +405,11 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 #ifndef TMA_DISABLE_ALL
         kValueTmaElements * uint32_t(sizeof(BF16)) +
         uint32_t(32) * uint32_t(sizeof(BF16)) +  // beta (bf16, sigmoid fused)
-        uint32_t(cute::cosize_v<MMALayout>) * uint32_t(sizeof(BF16)) * 3 +  // k_decayed, q_decayed, k_restored
-        uint32_t(cute::cosize_v<GTotalLayout>) * uint32_t(sizeof(float)) +    // g_total
-        uint32_t(cute::cosize_v<LMLayout>) * uint32_t(sizeof(BF16)) * 2 +    // INV, Mqk
+        (kFusedWorkspace
+            ? uint32_t(cute::cosize_v<MMALayout>) * uint32_t(sizeof(BF16)) * 3
+            : uint32_t(cute::cosize_v<MMALayout>) * uint32_t(sizeof(BF16)) * 3 +
+              uint32_t(cute::cosize_v<GTotalLayout>) * uint32_t(sizeof(float)) +
+              uint32_t(cute::cosize_v<LMLayout>) * uint32_t(sizeof(BF16)) * 2) +
 #endif
         0u;
 
@@ -561,6 +598,9 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
 
     // --- LOAD warp: issue TMA loads for v, beta, and workspace intermediates
     if (warp_role == WarpRole::LOAD_QKG && lane_predicate) {
+        Tensor g_q = tma_load_q.get_tma_tensor(make_shape(H, T_total, D));
+        Tensor g_k = tma_load_k.get_tma_tensor(make_shape(H, T_total, D));
+        Tensor g_gate = tma_load_g.get_tma_tensor(make_shape(H, T_total, D));
         Tensor g_v = tma_load_v.get_tma_tensor(make_shape(H, T_total, D));
         Tensor g_beta = tma_load_beta.get_tma_tensor(make_shape(H * T_total));
 
@@ -580,6 +620,9 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
         auto cta_ws_gt = tma_load_ws_gt.get_slice(Int<0>{});
         auto cta_ws_inv = tma_load_ws_inv.get_slice(Int<0>{});
         auto cta_ws_mqk = tma_load_ws_mqk.get_slice(Int<0>{});
+        auto cta_tma_load_q = tma_load_q.get_slice(Int<0>{});
+        auto cta_tma_load_k = tma_load_k.get_slice(Int<0>{});
+        auto cta_tma_load_g = tma_load_g.get_slice(Int<0>{});
 
         for (int t = 0; t < t_tiles; ++t) {
             load_pipeline.producer_acquire(load_write);
@@ -618,53 +661,72 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             cute::copy(tma_load_beta.with(*tma_barrier),
                 cta_tma_load_beta.partition_S(g_beta_tile), cta_tma_load_beta.partition_D(s_beta_tile));
 
-            // TMA load workspace: k_decayed
-            {
-                auto off = g_ws_kd.layout()(ws_idx, 0, 0);
-                Tensor g_tile = make_tensor(g_ws_kd.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_kd.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].k_decayed.begin()), TMAVOLayout{});
-                cute::copy(tma_load_ws_kd.with(*tma_barrier), cta_ws_kd.partition_S(g_tile), cta_ws_kd.partition_D(s_tile));
-            }
-            // q_decayed
-            {
-                auto off = g_ws_qd.layout()(ws_idx, 0, 0);
-                Tensor g_tile = make_tensor(g_ws_qd.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_qd.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].q_decayed.begin()), TMAVOLayout{});
-                cute::copy(tma_load_ws_qd.with(*tma_barrier), cta_ws_qd.partition_S(g_tile), cta_ws_qd.partition_D(s_tile));
-            }
-            // k_restored
-            {
-                auto off = g_ws_kr.layout()(ws_idx, 0, 0);
-                Tensor g_tile = make_tensor(g_ws_kr.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_kr.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].k_restored.begin()), TMAVOLayout{});
-                cute::copy(tma_load_ws_kr.with(*tma_barrier), cta_ws_kr.partition_S(g_tile), cta_ws_kr.partition_D(s_tile));
-            }
-            // g_total
-            {
-                auto off = g_ws_gt.layout()(ws_idx, 0);
-                Tensor g_tile = make_tensor(g_ws_gt.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<D>{}), stride(g_ws_gt.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].g_total.begin()), TMAGTotalSmemLayout{});
-                cute::copy(tma_load_ws_gt.with(*tma_barrier), cta_ws_gt.partition_S(g_tile), cta_ws_gt.partition_D(s_tile));
-            }
-            // INV
-            {
-                auto off = g_ws_inv.layout()(ws_idx, 0, 0);
-                Tensor g_tile = make_tensor(g_ws_inv.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<CHUNK>{}), stride(g_ws_inv.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].INV.begin()), TMALMLayout{});
-                cute::copy(tma_load_ws_inv.with(*tma_barrier), cta_ws_inv.partition_S(g_tile), cta_ws_inv.partition_D(s_tile));
-            }
-            // Mqk
-            {
-                auto off = g_ws_mqk.layout()(ws_idx, 0, 0);
-                Tensor g_tile = make_tensor(g_ws_mqk.data() + off,
-                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<CHUNK>{}), stride(g_ws_mqk.layout())));
-                Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].Mqk.begin()), TMALMLayout{});
-                cute::copy(tma_load_ws_mqk.with(*tma_barrier), cta_ws_mqk.partition_S(g_tile), cta_ws_mqk.partition_D(s_tile));
+            if constexpr (kFusedWorkspace) {
+                // Reuse the three full-size K2 input buffers for raw q, k and
+                // gate.  The MMA warps turn them in-place into q/k-decayed,
+                // k-restored, INV and Mqk after the TMA barrier completes.
+                auto q_off = g_q.layout()(head_idx, int(bos) + t * CHUNK, 0);
+                auto q_tile = make_tensor(g_q.data() + q_off,
+                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_q.layout())));
+                auto k_tile = make_tensor(g_k.data() + q_off,
+                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_k.layout())));
+                auto g_tile = make_tensor(g_gate.data() + q_off,
+                    make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_gate.layout())));
+                Tensor s_q = make_tensor(make_smem_ptr(shared_storage.input[stage].k_decayed.begin()), TMAQKLayout{});
+                Tensor s_k = make_tensor(make_smem_ptr(shared_storage.input[stage].q_decayed.begin()), TMAQKLayout{});
+                Tensor s_g = make_tensor(make_smem_ptr(shared_storage.input[stage].k_restored.begin()), TMAQKLayout{});
+                cute::copy(tma_load_q.with(*tma_barrier), cta_tma_load_q.partition_S(q_tile), cta_tma_load_q.partition_D(s_q));
+                cute::copy(tma_load_k.with(*tma_barrier), cta_tma_load_k.partition_S(k_tile), cta_tma_load_k.partition_D(s_k));
+                cute::copy(tma_load_g.with(*tma_barrier), cta_tma_load_g.partition_S(g_tile), cta_tma_load_g.partition_D(s_g));
+            } else {
+                // TMA load workspace: k_decayed
+                {
+                    auto off = g_ws_kd.layout()(ws_idx, 0, 0);
+                    Tensor g_tile = make_tensor(g_ws_kd.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_kd.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].k_decayed.begin()), TMAVOLayout{});
+                    cute::copy(tma_load_ws_kd.with(*tma_barrier), cta_ws_kd.partition_S(g_tile), cta_ws_kd.partition_D(s_tile));
+                }
+                // q_decayed
+                {
+                    auto off = g_ws_qd.layout()(ws_idx, 0, 0);
+                    Tensor g_tile = make_tensor(g_ws_qd.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_qd.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].q_decayed.begin()), TMAVOLayout{});
+                    cute::copy(tma_load_ws_qd.with(*tma_barrier), cta_ws_qd.partition_S(g_tile), cta_ws_qd.partition_D(s_tile));
+                }
+                // k_restored
+                {
+                    auto off = g_ws_kr.layout()(ws_idx, 0, 0);
+                    Tensor g_tile = make_tensor(g_ws_kr.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<D>{}), stride(g_ws_kr.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].k_restored.begin()), TMAVOLayout{});
+                    cute::copy(tma_load_ws_kr.with(*tma_barrier), cta_ws_kr.partition_S(g_tile), cta_ws_kr.partition_D(s_tile));
+                }
+                // g_total
+                {
+                    auto off = g_ws_gt.layout()(ws_idx, 0);
+                    Tensor g_tile = make_tensor(g_ws_gt.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<D>{}), stride(g_ws_gt.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].g_total.begin()), TMAGTotalSmemLayout{});
+                    cute::copy(tma_load_ws_gt.with(*tma_barrier), cta_ws_gt.partition_S(g_tile), cta_ws_gt.partition_D(s_tile));
+                }
+                // INV
+                {
+                    auto off = g_ws_inv.layout()(ws_idx, 0, 0);
+                    Tensor g_tile = make_tensor(g_ws_inv.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<CHUNK>{}), stride(g_ws_inv.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].INV.begin()), TMALMLayout{});
+                    cute::copy(tma_load_ws_inv.with(*tma_barrier), cta_ws_inv.partition_S(g_tile), cta_ws_inv.partition_D(s_tile));
+                }
+                // Mqk
+                {
+                    auto off = g_ws_mqk.layout()(ws_idx, 0, 0);
+                    Tensor g_tile = make_tensor(g_ws_mqk.data() + off,
+                        make_layout(make_shape(Int<1>{}, Int<CHUNK>{}, Int<CHUNK>{}), stride(g_ws_mqk.layout())));
+                    Tensor s_tile = make_tensor(make_smem_ptr(shared_storage.input[stage].Mqk.begin()), TMALMLayout{});
+                    cute::copy(tma_load_ws_mqk.with(*tma_barrier), cta_ws_mqk.partition_S(g_tile), cta_ws_mqk.partition_D(s_tile));
+                }
             }
 
             ++load_write;
@@ -710,6 +772,222 @@ __global__ void __launch_bounds__(NumThreads) _flash_kda_fwd_recurrence(
             Tensor g_total = make_tensor(make_smem_ptr(shared_storage.input[load_stage].g_total.begin()), GTotalLayout{});
             Tensor INV = make_tensor(make_smem_ptr(shared_storage.input[load_stage].INV.begin()), LMLayout{});
             Tensor Mqk = make_tensor(make_smem_ptr(shared_storage.input[load_stage].Mqk.begin()), LMLayout{});
+
+            if constexpr (kFusedWorkspace) {
+                // K1/K2 workspace fusion prototype.  The producer loaded raw
+                // q/k/g into the three full-size buffers that normally carry
+                // k_decayed/q_decayed/k_restored.  Reconstruct K1's prepare
+                // stages here, in-place, before entering the unchanged K2
+                // recurrence.  This removes both the K1 workspace stores and
+                // the K2 workspace loads from the global-memory path.
+                Tensor q_raw = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].k_decayed.begin()), QKLayout{});
+                Tensor k_raw = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].q_decayed.begin()), QKLayout{});
+                Tensor g_raw = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].k_restored.begin()), GLayout{});
+                Tensor qd_out = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].q_decayed.begin()), MMALayout{});
+                Tensor kd_out = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].k_decayed.begin()), MMALayout{});
+                Tensor kr_out = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].k_restored.begin()), MMALayout{});
+                Tensor ki_out = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].k_inv.begin()), MMALayout{});
+                Tensor L = make_tensor(
+                    make_smem_ptr(shared_storage.input[load_stage].L.begin()), LMLayout{});
+                Tensor L_fp16 = make_tensor(
+                    make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].L.begin())), LMLayout{});
+
+                // Match K1's per-row L2 normalization and BF16 rounding.
+                constexpr int ELEMS_PER_THREAD = 8;
+                constexpr int THREADS_PER_ROW = D / ELEMS_PER_THREAD;
+                // 128 compute threads cover the 16 rows in two disjoint
+                // passes; the warp-shuffle reduction remains identical to
+                // K1's 16-thread row groups.
+                for (int norm_pass = 0; norm_pass < 2; ++norm_pass) {
+                    int my_row = (compute_tid / THREADS_PER_ROW) + norm_pass * 8;
+                    int my_col = (compute_tid % THREADS_PER_ROW) * ELEMS_PER_THREAD;
+                    float q_vals[ELEMS_PER_THREAD], k_vals[ELEMS_PER_THREAD];
+                    float q_sq = 0.0f, k_sq = 0.0f;
+                    #pragma unroll
+                    for (int i = 0; i < ELEMS_PER_THREAD; ++i) {
+                        float qv = bf16_to_f32(q_raw(my_row, my_col + i));
+                        float kv = bf16_to_f32(k_raw(my_row, my_col + i));
+                        q_vals[i] = qv;
+                        k_vals[i] = kv;
+                        q_sq += qv * qv;
+                        k_sq += kv * kv;
+                    }
+                    #pragma unroll
+                    for (int delta = 8; delta >= 1; delta >>= 1) {
+                        q_sq += __shfl_xor_sync(0xFFFFFFFF, q_sq, delta);
+                        k_sq += __shfl_xor_sync(0xFFFFFFFF, k_sq, delta);
+                    }
+                    float q_inv_norm = rsqrtf(q_sq + 1e-6f);
+                    float k_inv_norm = rsqrtf(k_sq + 1e-6f);
+                    #pragma unroll
+                    for (int i = 0; i < ELEMS_PER_THREAD; ++i) {
+                        q_raw(my_row, my_col + i) = BF16(q_vals[i] * q_inv_norm);
+                        k_raw(my_row, my_col + i) = BF16(k_vals[i] * k_inv_norm);
+                    }
+                }
+                __syncthreads();
+
+                // Fused gate activation + cumulative sum.  The raw gate
+                // buffer is overwritten with BF16 cumulative values, while
+                // g_total retains the FP32 terminal cumulative exponent.
+                if (compute_tid < D) {
+                    int col = compute_tid;
+                    float dt = dt_bias_ptr[head_idx * D + col];
+                    float sum = 0.0f;
+                    float a_log_exp = expf(A_log_ptr[head_idx]);
+                    #pragma unroll
+                    for (int row = 0; row < CHUNK; ++row) {
+                        int global_row = t * CHUNK + row;
+                        float gv = (global_row < seq_len)
+                            ? bf16_to_f32(g_raw(row, col)) + dt : 0.0f;
+                        gv = a_log_exp * gv;
+                        gv = gate_scale * sigmoid_tanh_approx_f32(gv);
+                        sum += gv;
+                        g_raw(row, col) = BF16(sum);
+                    }
+                    g_total(col) = ex2_approx_ftz_f32(sum);
+                }
+                __syncthreads();
+
+                // Match K1's decay layout.  K2 has four MMA warps (128
+                // compute threads), so each thread performs two of K1's
+                // eight warp groups.  The two passes have disjoint output
+                // elements and therefore need no intermediate barrier.
+                static_assert(D % 64 == 0);
+                static_assert(CHUNK % 8 == 0);
+                constexpr int N_M = CHUNK / 8;
+                constexpr int N_N = D / 64;
+                constexpr int N_TILES = N_M * N_N;
+                for (int pass = 0; pass < 2; ++pass) {
+                    int fused_tid = compute_tid + pass * kComputeThreads;
+                    int lane = fused_tid % 32;
+                    int fused_warp = fused_tid / 32;
+                    int g = lane / 4;
+                    int tt = lane % 4;
+                    float reg_g[N_TILES][2];
+                    BF16 reg_q[N_TILES][2];
+                    BF16 reg_k[N_TILES][2];
+                    float reg_gt[N_TILES][2];
+
+                    #pragma unroll
+                    for (int m_blk = 0; m_blk < CHUNK; m_blk += 8) {
+                        #pragma unroll
+                        for (int n_blk = 0; n_blk < D; n_blk += 64) {
+                            int tile_idx = (m_blk / 8) * N_N + (n_blk / 64);
+                            int row = m_blk + ((fused_warp + g) % 8);
+                            int col_base = n_blk + g * 8;
+                            int col_tile = col_base / 8;
+                            Tensor tile_g = local_tile(g_raw, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_q = local_tile(q_raw, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_k = local_tile(k_raw, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_gt = local_tile(g_total, make_shape(_8{}), make_coord(col_tile));
+                            Tensor s_g = local_tile(tile_g, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_q = local_tile(tile_q, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_k = local_tile(tile_k, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_gt = local_tile(tile_gt, make_shape(_2{}), make_coord(tt));
+                            Tensor r_g = make_tensor_like<float>(s_g);
+                            Tensor r_q = make_tensor_like<BF16>(s_q);
+                            Tensor r_k = make_tensor_like<BF16>(s_k);
+                            Tensor r_gt = make_tensor_like<float>(s_gt);
+                            cute::copy(AutoVectorizingCopy{}, s_g, r_g);
+                            cute::copy(AutoVectorizingCopy{}, s_q, r_q);
+                            cute::copy(AutoVectorizingCopy{}, s_k, r_k);
+                            cute::copy(AutoVectorizingCopy{}, s_gt, r_gt);
+                            #pragma unroll
+                            for (int v = 0; v < 2; ++v) {
+                                reg_g[tile_idx][v] = r_g(0, v);
+                                reg_q[tile_idx][v] = r_q(0, v);
+                                reg_k[tile_idx][v] = r_k(0, v);
+                                reg_gt[tile_idx][v] = r_gt(v);
+                            }
+                        }
+                    }
+                    #pragma unroll
+                    for (int m_blk = 0; m_blk < CHUNK; m_blk += 8) {
+                        #pragma unroll
+                        for (int n_blk = 0; n_blk < D; n_blk += 64) {
+                            int tile_idx = (m_blk / 8) * N_N + (n_blk / 64);
+                            int row = m_blk + ((fused_warp + g) % 8);
+                            int col_base = n_blk + g * 8;
+                            int col_tile = col_base / 8;
+                            Tensor tile_qd = local_tile(qd_out, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_kd = local_tile(kd_out, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_kr = local_tile(kr_out, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor tile_ki = local_tile(ki_out, make_shape(_1{}, _8{}), make_coord(row, col_tile));
+                            Tensor s_qd = local_tile(tile_qd, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_kd = local_tile(tile_kd, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_kr = local_tile(tile_kr, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor s_ki = local_tile(tile_ki, make_shape(_1{}, _2{}), make_coord(0, tt));
+                            Tensor r_qd = make_tensor_like<BF16>(s_qd);
+                            Tensor r_kd = make_tensor_like<BF16>(s_kd);
+                            Tensor r_ki = make_tensor_like<BF16>(s_ki);
+                            Tensor r_kr = make_tensor_like<BF16>(s_kr);
+                            #pragma unroll
+                            for (int v = 0; v < 2; ++v) {
+                                float gv = reg_g[tile_idx][v];
+                                BF16 qv = reg_q[tile_idx][v];
+                                BF16 kv = reg_k[tile_idx][v];
+                                BF16 exp_cumsum = BF16(ex2_approx_ftz_f32(gv));
+                                r_qd(0, v) = qv * exp_cumsum * BF16(scale);
+                                r_kd(0, v) = kv * exp_cumsum;
+                                BF16 inv_cumsum = BF16(ex2_approx_ftz_f32(-gv));
+                                r_ki(0, v) = kv * inv_cumsum;
+                                r_kr(0, v) = kv * inv_cumsum * BF16(reg_gt[tile_idx][v]);
+                            }
+                            cute::copy(AutoVectorizingCopy{}, r_qd, s_qd);
+                            cute::copy(AutoVectorizingCopy{}, r_kd, s_kd);
+                            cute::copy(AutoVectorizingCopy{}, r_ki, s_ki);
+                            cute::copy(AutoVectorizingCopy{}, r_kr, s_kr);
+                        }
+                    }
+                }
+                __syncthreads();
+
+                // Form K1's L and Mqk, then run the same triangular inverse
+                // and Neumann-series routine.  L is a dedicated temporary;
+                // INV is first used as k_inv and then overwritten in-place by
+                // the final inverse.
+                if (compute_tid < 32) {
+                    mma_m16n16_bf16bf16fp16_1warp(kd_out, ki_out, L_fp16, compute_tid);
+                }
+                if (compute_tid >= 32 && compute_tid < 64) {
+                    mma_m16n16_bf16bf16bf16_1warp(qd_out, ki_out, Mqk, compute_tid - 32);
+                }
+                __syncthreads();
+
+                for (int inv_pass = 0; inv_pass < 2; ++inv_pass) {
+                    int inv_tid = compute_tid + inv_pass * kComputeThreads;
+                    const int col_block_size = 8;
+                    int block_idx = inv_tid / (CHUNK * col_block_size);
+                    int i = (inv_tid / col_block_size) % CHUNK;
+                    int j = inv_tid % col_block_size + block_idx * col_block_size;
+                    if (i <= j) {
+                        L_fp16(i, j) = FP16::bitcast(0);
+                    } else {
+                        L_fp16(i, j) = L_fp16(i, j) * FP16(sigmoid_tanh_approx_f32(float(beta_tile(beta_smem_offset + i))));
+                    }
+                    if (i < j) Mqk(i, j) = BF16::bitcast(0);
+                    FP16 x = L_fp16(i, j);
+                    INV(i, j) = (i == j ? FP16(1.0f) - x : -x);
+                }
+                __syncthreads();
+                Tensor INV_fp16 = make_tensor(
+                    make_smem_ptr(reinterpret_cast<FP16*>(shared_storage.input[load_stage].INV.begin())), LMLayout{});
+                // The helper is warp-specialized and owns one 16x16 tile;
+                // its own guard limits work to the first 32 threads.
+                if (compute_tid < 32) {
+                    neumann_inv_fused_1warp(L_fp16, INV_fp16, INV, compute_tid);
+                }
+                cutlass::arch::fence_view_async_shared();
+                __syncthreads();
+            }
 
             Tensor s_acc = make_tensor(
                 make_smem_ptr(shared_storage.state_acc.begin()),
