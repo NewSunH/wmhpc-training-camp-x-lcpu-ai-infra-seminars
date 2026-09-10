@@ -1,0 +1,184 @@
+\section{R14 执行记录：K1/K2 workspace fusion prototype}
+
+\subsection{目标和设计边界}
+
+R12 的 output epilogue 已经能够在完整 H=96 路径上与 baseline 持平，
+但 K1/K2 之间仍存在一条显式的 global workspace 通路。K1 对每个
+$(\text{head},\text{tile})$ 写出
+\code{k\_decayed}、\code{q\_decayed}、\code{k\_restored}、
+\code{g\_total}、\code{INV} 和 \code{Mqk}；K2 再以六个 TMA load 将
+这些中间量读回。对于 $T=8192,H=96,D=128,CHUNK=16$，每个 tile 的
+workspace 写入和读入合计约为 $2\times18$ KiB，且这条通路还需要多个
+TMA descriptor 和 pipeline transaction。
+
+本轮验证一个结构性候选：令 K2 直接加载原始 $q,k,g$，在 K2 的 input
+stage 中重用原有的三个 full-size BF16 tile buffer，重新执行 K1 的
+normalize、gate/cumsum、decay、$L/Mqk$ GEMM 和 Neumann inverse，随后
+进入原有 recurrence。这样可以在理论上移除 K1 workspace 的 global
+store 与 K2 workspace 的 global load；代价是将 K1 的计算搬到 K2，且
+K2 的 128 个 compute threads 需要以两次 pass 覆盖 K1 原先的 256-thread
+映射。
+
+该实现只作为完整 non-split K2 的 opt-in prototype。默认构建不设置
+\code{FLASH\_KDA\_C1\_FUSED\_WS}，也不改变 Python workspace ABI，
+因此默认路径继续使用 R12 的 K1/K2 分离实现。value-split、direct-output
+和 fused-TMA epilogue 不与本 prototype 合并。
+
+\subsection{代码改动}
+
+\begin{itemize}
+  \item 在 \code{setup.py} 增加
+        \code{FLASH\_KDA\_C1\_FUSED\_WS} 到
+        \code{-DC1\_K1\_K2\_FUSED\_WS=1} 的 opt-in 映射。
+  \item 在 \code{fwd\_launch.cu} 中，开启该宏时跳过 K1 launch，并把
+        q/k/g 的 TMA descriptor、\code{scale}、\code{A\_log}、
+        \code{dt\_bias} 和 \code{gate\_scale} 传给 K2。
+  \item 在 \code{fwd\_kernel2.cuh} 中为 K2 增加 q/k/g TMA 参数。原有
+        \code{k\_decayed/q\_decayed/k\_restored} 三个 buffer 先作为
+        raw q/k/g 的 row-major TMA 目标，随后通过 K1 的布局解释为
+        MMA-interleaved tile。新增 \code{k\_inv} full tile 和 \code{L}
+        临时 tile，用于完成 K1 的两个中间矩阵计算。
+  \item gate 的 cumulative BF16 值暂存回原 \code{k\_restored} backing
+        storage，\code{g\_total} 保持 FP32 terminal exponent；所有跨
+        compute-warp 的同步使用 K2 已有的
+        \code{NamedBarrier(kComputeThreads,0)}。
+\end{itemize}
+
+\code{k\_inv} 和 \code{L} 仅在 \code{C1\_K1\_K2\_FUSED\_WS=1} 时编译
+进 \code{InputStorage}；宏关闭时默认 K2 的 shared-storage layout 与
+R12 保持一致。由此避免“仅加入 opt-in 代码却改变 baseline 资源形态”的
+实验污染。
+
+实现提交为 \code{fafe4c3}；随后修正 inverse 的 FP16 alias 类型，提交
+为 \code{3af49e6}；首个 smoke 暴露 MMA-only 分支中使用 CTA-wide
+\code{__syncthreads()} 的死锁，再改为 compute-only named barrier，提交
+为 \code{6a3d675}。这些提交均已推送到远端仓库。
+
+\subsection{B300 构建命令和失败修正}
+
+将三个相关源码同步到 B300 checkout 后，使用 assignment venv、SM103a
+和 GPU allocation 编译：
+
+\begin{lstlisting}
+scp assignment02/team/c1_flashkda/FlashKDA/setup.py \\
+  assignment02/team/c1_flashkda/FlashKDA/csrc/smxx/fwd_launch.cu \\
+  assignment02/team/c1_flashkda/FlashKDA/csrc/smxx/fwd_kernel2.cuh \\
+  infrab300:<B300_REPO>/assignment02/team/c1_flashkda/FlashKDA/...
+
+ssh infrab300 'cd <B300_REPO>/assignment02/team/c1_flashkda/FlashKDA &&
+  srun --partition=gpu --gres=gpu:1 --cpus-per-task=8 --time=00:30:00
+    --chdir="$PWD" env
+    PATH=<B300_REPO>/assignment02/.venv/bin:$PATH
+    FLASH_KDA_CUDA_ARCHS=103a
+    FLASH_KDA_C1_FUSED_WS=1
+    FLASH_KDA_VERSION_SUFFIX=+c1fusedws
+    NVCC_THREADS=8 /usr/local/bin/uv pip install
+    --python <B300_REPO>/assignment02/.venv/bin/python
+    --reinstall --no-build-isolation --no-deps -e .
+    2>&1 | tee /tmp/c1_fusedws_build.log'
+\end{lstlisting}
+
+初次构建为 Slurm job 24939，报错位置是 inverse 初始化：
+\code{INV(i,j)} 的 BF16 tensor 被直接赋予 FP16 expression。将目标改为
+原 K1 同样的 FP16 alias \code{INV\_fp16(i,j)} 后，job 24941
+（\code{+c1fusedws2}）成功生成 extension。随后增加 barrier 修正，
+job 24945（\code{+c1fusedws3}）再次成功构建；日志显示 editable wheel
+安装完成，产出的 B300 extension 大小为约 17.5 MB。对应日志保存在
+\code{results/r14\_remote/r14\_build\_initial.log}、
+\code{r14\_build\_inverse\_fix.log} 和
+\code{r14\_build\_barrier\_fix.log}。
+
+\subsection{死锁诊断和 exactness smoke}
+
+第一次运行 focused smoke：
+
+\begin{lstlisting}
+ssh infrab300 'cd <B300_REPO>/assignment02/team/c1_flashkda/FlashKDA &&
+  srun --partition=gpu --gres=gpu:1 --cpus-per-task=8 --time=00:15:00
+    --chdir="$PWD" env PATH=<B300_REPO>/assignment02/.venv/bin:$PATH
+    <B300_REPO>/assignment02/.venv/bin/python -u
+    ../challenge/vsplit_native_smoke.py --seed 42
+    --json /tmp/c1_fusedws_smoke.json'
+\end{lstlisting}
+
+job 24943 在分配到 GPU 后不再产生 Python 输出，持续等待。静态检查
+确认 prototype 位于 \code{if (warp\_role == MMA)} 分支，而
+\code{__syncthreads()} 要求整个 CTA（包括 load/store warp）参与，故该
+调用构成死锁。job 24943 已取消；这一失败保存在初始构建/运行阶段的
+远端临时日志中。
+
+将 prototype 内的六个同步点改为 K2 的
+\code{compute\_barrier.arrive\_and\_wait()} 后，重新构建 job 24945，
+再提交 exactness smoke job 24949。该 job 使用已有
+\code{vsplit\_native\_smoke.py} 的五个 case（包含 H=96、H=1、BF16/FP32
+state、state in/out 和 no-state），结果如下：
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r r@{}}
+\toprule
+case & output diff & output exact & state diff & state exact \\
+\midrule
+T16,H96,BF16,in/out & 196608 & no & 1572864 & no \\
+T17,H1,FP32,in/out & 2176 & no & 16384 & no \\
+T64,H1,BF16,no-state & 8192 & no & 0 & yes \\
+T17,H1,BF16,in-only & 2176 & no & 0 & yes \\
+T17,H1,FP32,out-only & 2176 & no & 16384 & no \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+完整 JSON 和 stdout 在
+\code{results/r14\_remote/r14\_ws\_smoke\_24949.json} 与
+\code{r14\_ws\_smoke\_24949.log}。no-state case 的 state 列自然为
+空输出，因此不能掩盖 output 全部不 exact 的事实。job 24949 没有进入
+benchmark；本轮不报告 workspace fusion 的性能数字。
+
+\subsection{失败原因的当前判断}
+
+构建成功但五个 smoke case 均有 output mismatch，说明问题已经从编译
+接口进入数据布局或数值顺序层面。当前最可疑的因素有三类：
+
+\begin{enumerate}
+  \item K1 的 TMA destination 使用 \code{TMAQKLayout}，而 backing
+        storage 后续以 K2 的 \code{MMALayout} 解释；虽然两者共享物理
+        缓冲区，必须逐项验证 raw TMA 写入、row-major 访问和 MMA-inter
+        layout 之间的物理映射，不能仅凭元素数量相同认为等价。
+  \item 128 compute threads 的两-pass decay 映射、K1 的 256-thread
+        inverse 初始化以及 Neumann helper 的 warp ownership 需要与
+        K1 的 lane/warp map 完全一致；目前 smoke 结果说明至少有一处
+        映射或同步协议不等价。
+  \item prototype 在同一 input stage 中同时保留 V 和重用的 q/k/g
+        backing；即使 TMA barrier 的 transaction bytes 正确，也必须
+        检查 producer/consumer pipeline 对 stage reuse 的生命周期。
+\end{enumerate}
+
+\subsection{资源与收益评估}
+
+本轮尚未得到可用 benchmark，因此不能宣称 workspace fusion 有性能
+收益。理论上它可移除约 2 倍 workspace traffic 和六个 workspace TMA
+操作，但代价是 K2 每个 tile 重新执行 K1 的 normalize、gate/decay 和
+inverse。K1 原本使用 256 threads 且拥有独立的 token-parallel grid；
+把相同计算压进 128 compute threads 的 head-parallel K2 会增加 recurrence
+CTA 的串行工作和寄存器压力。即使修复 exactness，也需要重新测量
+register、dynamic shared memory、TMA wait 和完整 H=96 latency，不能从
+global traffic 减少直接推断端到端加速。
+
+\begin{decision}{R14 接入决策}
+K1/K2 workspace fusion prototype 已成功通过 B300 编译，但在 barrier
+修正后的 job 24949 上仍未通过任何完整 output exactness smoke，因而不
+进入默认路径、不进行性能结论，也不接入完整 C1 推荐实现。默认宏保持
+关闭；本轮保留源码、编译失败修正、死锁诊断和 exactness JSON 作为
+“结构上有潜力但当前 ABI/layout 尚未正确”的负结果证据。
+\end{decision}
+
+\begin{record}{R14 结论}
+本轮把 workspace fusion 从静态设想推进到可编译的 opt-in K2 prototype，
+并验证了一个重要边界：省略 workspace load/store 并不等价于只增加三个
+raw-input TMA。K1 的 CuTe TMA/physical layout、256-thread prepare map、
+K2 pipeline stage 和 recurrence warp map 必须共同保持；当前实现虽然
+可以编译和运行，但 output/state 均不 exact。故 R14 没有达到作业性能
+目标，也没有产生可与 R12 baseline 比较的 benchmark；后续若重访，应先
+用独立 tile-level oracle 对每个 reconstructed intermediate 做 bitwise
+对照，再考虑完整 K2 集成。
+\end{record}

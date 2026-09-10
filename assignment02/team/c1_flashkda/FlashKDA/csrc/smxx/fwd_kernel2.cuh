@@ -227,15 +227,19 @@ struct SharedStorageK2 {
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> q_decayed;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_restored;
+#if C1_K1_K2_FUSED_WS
         // K1's inverse-decay vector is needed only while forming L/Mqk.  It
         // is a full [CHUNK,D] tile, so it cannot fit in the 16x16 INV tile.
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<MMALayout>> k_inv;
+#endif
         alignas(128) cute::ArrayEngine<float, cute::cosize_v<GTotalLayout>> g_total;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> INV;
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> Mqk;
+#if C1_K1_K2_FUSED_WS
         // K1/K2 workspace-fusion temporary.  During fused preparation this
         // holds L=K_decayed @ K_inv before being overwritten by the final INV.
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<LMLayout>> L;
+#endif
     };
 
     struct OutputStorage {

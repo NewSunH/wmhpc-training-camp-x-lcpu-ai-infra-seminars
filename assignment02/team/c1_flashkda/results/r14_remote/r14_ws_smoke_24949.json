@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "H": 96,
+      "T": 16,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "t16_h96_bf16_inout",
+      "output_different": 196608,
+      "output_exact": false,
+      "state_different": 1572864,
+      "state_dtype": "bfloat16",
+      "state_exact": false
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": true,
+      "has_state_out": true,
+      "name": "t17_h1_fp32_inout",
+      "output_different": 2176,
+      "output_exact": false,
+      "state_different": 16384,
+      "state_dtype": "float32",
+      "state_exact": false
+    },
+    {
+      "H": 1,
+      "T": 64,
+      "has_state_in": false,
+      "has_state_out": false,
+      "name": "t64_h1_bf16_no_state",
+      "output_different": 8192,
+      "output_exact": false,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": true,
+      "has_state_out": false,
+      "name": "t17_h1_bf16_in_only",
+      "output_different": 2176,
+      "output_exact": false,
+      "state_different": 0,
+      "state_dtype": "bfloat16",
+      "state_exact": true
+    },
+    {
+      "H": 1,
+      "T": 17,
+      "has_state_in": false,
+      "has_state_out": true,
+      "name": "t17_h1_fp32_out_only",
+      "output_different": 2176,
+      "output_exact": false,
+      "state_different": 16384,
+      "state_dtype": "float32",
+      "state_exact": false
+    }
+  ],
+  "seed": 42
+}
