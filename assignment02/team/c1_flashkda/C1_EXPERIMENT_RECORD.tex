@@ -1677,4 +1677,354 @@ state 逐元素 exact。故本轮满足正确性和资源重构目标。
 作为作业提交版本。
 \end{record}
 
+\section{第五轮：B300 上 tcgen05 state-update 微内核评估}
+
+\subsection{本轮问题、边界和判定标准}
+
+R4 的分片 TMA 原型已经满足 exactness 和 shared-memory 重构目标，但在
+B300 的官方 fixed \( [8192,96,128] \) benchmark 中仍比恢复的 baseline
+慢 \(13.3\)--\(18.5\%\)。上一轮的 NCU 计数只能说明 split recurrence 的
+动态 shared memory 已从 98,432\,B 降到 68,608\,B，尚不能回答剩余时间是否
+来自 SM80 MMA、TMA、K1 workspace、reduction 或 epilogue。因此本轮把问题
+缩小为一个可以独立计时的 state-update GEMM：
+\[
+  D_{M\times N}=A_{M\times K}B_{N\times K}^{\mathsf T},\qquad
+  (M,N,K)=(128,128,16).
+\]
+
+这个形状不是把 FlashKDA 的 \(16\times16\) warp tile 直接替换掉，而是
+tcgen05 在 CUTLASS 中允许的最小有代表性形状。判定标准分为三层：
+
+\begin{enumerate}
+\item 编译层：使用固定 CUTLASS checkout 和 \code{sm\_103a}，不修改
+      FlashKDA 默认构建；
+\item 数值层：每个 probe 都和 CPU reference 比较，要求
+      \code{Relative error = 0}；
+\item 性能层：同一个二进制内 warm-up 后用 CUDA events 测量 steady-state，
+      另以轻量 NCU 记录 block/grid、寄存器、动态 shared memory 和
+      \code{gpu\_\_time\_duration}。NCU 的时间不作为端到端性能结论。
+\end{enumerate}
+
+本轮仍保持 \code{FLASH\_KDA\_C1\_VSPLIT\_K2=0} 的默认环境。也就是说，
+tcgen05 代码只放在 \code{challenge/}，不接入
+\code{csrc/smxx/fwd\_kernel2.cuh}；只有在微内核同时显示形状可行、资源
+合理且有明显收益时，才会进入下一轮的完整 K2 设计。
+
+\subsection{代码改动和计时接口}
+
+\code{challenge/tcgen05\_sm103\_gemm.cu} 原先是 CUTLASS
+\code{01\_mma\_sm100.cu} 的 SM103 适配版，默认 atom 为
+\(128\times256\times16\)，每个 MMA tile 串联四个 \(K=16\) 指令。本轮
+增加了三个编译期开关：
+
+\begin{itemize}
+\item \code{C1\_TCGEN05\_STATE}：将 atom 和默认问题改为
+      \(128\times128\times16\)，并把 \(K\)-tile 数设为 1；
+\item \code{C1\_TCGEN05\_QUIET}：关闭 device-side CuTe layout dump，使
+      重复 benchmark 不被 \code{print()} 干扰；
+\item \code{C1\_TCGEN05\_BENCH\_ITERS} 和
+      \code{C1\_TCGEN05\_BENCH\_WARMUP}：运行时环境变量，控制 warm-up
+      和 CUDA event 迭代次数。
+\end{itemize}
+
+计时接口放在第一次正确性 kernel launch 之后。每次调用仍由 host helper
+完成 TiledMMA、SMEM layout 和 cluster launch；事件从 warm-up 后的
+\code{cudaEventRecord(start)} 开始，到 stop event 同步结束。因此它测量
+的是 default stream 上已排队的 device 工作，不包含 host 端模板构造和
+Python 调度。正确性所需的第一次输出在 event 区间之前不会被拿来当作
+benchmark 样本。
+
+\code{challenge/tcgen05\_sm103\_2sm\_probe.cu} 是固定 CUTLASS
+\code{04\_mma\_tma\_2sm\_sm100.cu} 的独立副本。它保留 2SM TMA multicast、
+TMEM \code{Allocator2Sm}、cluster barrier 和 TMEM-to-register epilogue，
+同样加入 quiet/event 接口。另加 \code{C1\_TCGEN05\_STATE2}：
+
+\begin{itemize}
+\item atom：\code{SM100\_MMA\_F16BF16\_2x1SM\_SS<...,128,128,...>}；
+\item \(K\)-tile 数：1，即 \(K=16\)；
+\item cluster：\((2,1,1)\)，正好是一组 2SM peer CTA；
+\item shared-memory：\code{Layout\_K\_SW32\_Atom}。
+\end{itemize}
+
+这里的 \code{SW32} 不是性能猜测，而是由编译错误反推的必要条件：
+\code{SW128} 的 K-major atom 在 \(K=16\) 目标上不能整除，CuTe 在
+\code{tile\_to\_mma\_shape} 中拒绝它。
+
+\subsection{环境同步和第一次失败}
+
+B300 远端工作目录为
+\code{/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars}，
+固定 CUTLASS 位于
+\code{assignment02/team/c1\_flashkda/FlashKDA/cutlass}。本地源码先通过
+\code{scp} 同步到 challenge 目录；helper header 也单独同步，因为远端
+checkout 没有本地新建的 \code{example\_utils.hpp}。编译采用 Slurm 内的
+GPU allocation：
+
+\begin{lstlisting}
+scp assignment02/team/c1_flashkda/challenge/tcgen05_sm103_gemm.cu \
+  infrab300:<B300_REPO>/assignment02/team/c1_flashkda/challenge/tcgen05_sm103_gemm_r5.cu
+scp assignment02/team/c1_flashkda/challenge/example_utils.hpp \
+  infrab300:<B300_REPO>/assignment02/team/c1_flashkda/challenge/example_utils.hpp
+
+cd <B300_REPO>/assignment02/team/c1_flashkda/challenge
+sbatch --parsable --partition=gpu --gres=gpu:1 --time=00:10:00 \
+  --output=tcgen05_r5_build_%j.out \
+  --error=tcgen05_r5_build_%j.err \
+  --wrap='nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+    -DC1_TCGEN05_STATE=1 -DC1_TCGEN05_QUIET=1 \
+    -I../FlashKDA/cutlass/include \
+    -I../FlashKDA/cutlass/tools/util/include \
+    -I../FlashKDA/cutlass/examples/common -I. \
+    -o tcgen05_sm103_state tcgen05_sm103_gemm_r5.cu'
+\end{lstlisting}
+
+第一次 state 编译使用了默认的 \code{Layout\_K\_SW128\_Atom}。job 24201
+在 CUDA 编译阶段失败，两个关键静态断言为：
+
+\begin{lstlisting}
+tile_to_shape: block shape does not divide the target shape
+cooperative_copy: static assertion failed
+\end{lstlisting}
+
+实例化栈显示目标为
+\code{SM100\_MMA\_F16BF16\_SS<...,128,128,...>}、A/B 形状
+\((128,16)\)，而 \code{SW128} 的底层 K-major block 不能覆盖 \(K=16\)。
+这不是 \(128\times128\) MMA atom 非法；将两个 layout 改成
+\code{Layout\_K\_SW32\_Atom} 后，job 24206 编译成功，生成约 1.3\,MiB
+\texttt{tcgen05\_sm103\_state}。编译 stdout/stderr 均为空，说明该版本
+没有需要额外屏蔽的 warning 或 fallback。
+
+\subsection{1SM state probe：正确性与事件时间}
+
+最小单 tile 的运行命令为：
+
+\begin{lstlisting}
+C1_TCGEN05_BENCH_ITERS=100 C1_TCGEN05_BENCH_WARMUP=10 \
+  srun --partition=gpu --gres=gpu:1 --time=00:05:00 \
+  ./tcgen05_sm103_state \
+  > tcgen05_state_sm103_run_24206.log 2>&1
+\end{lstlisting}
+
+job 24207（srun allocation）输出：
+
+\begin{lstlisting}
+bench_iters=100 bench_warmup=10 bench_total_ms=2.42883 \
+  bench_iter_ms=0.0242883
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.
+\end{lstlisting}
+
+因此 \(128\times128\times16\) 这个 1SM probe exact，单次 event 平均
+\(0.0242883\) ms。该问题只有 \(2\cdot128\cdot128\cdot16=524,288\)
+个乘加 FLOP，折算为约 \(21.59\) GFLOP/s；这个数字受到 kernel launch、
+barrier、TMEM allocation 和 \(128\times128\) global store 固定成本支配，
+不表示 B300 的 tcgen05 峰值。
+
+为了和 2SM 做公平的大问题对照，使用同一个 state binary 覆盖
+\(512\times1024\times64\)，即 32 个 \(128\times128\times16\) tiled
+work items：
+
+\begin{lstlisting}
+C1_TCGEN05_BENCH_ITERS=100 C1_TCGEN05_BENCH_WARMUP=20 \
+  srun --partition=gpu --gres=gpu:1 --time=00:10:00 \
+  ./tcgen05_sm103_state 512 1024 64 \
+  > tcgen05_1sm_state_probe_run_24220.log 2>&1
+\end{lstlisting}
+
+job 24220 的 event 平均为 \(0.039775\) ms，CPU reference 仍为
+\code{Relative error = 0}。该工作量为 \(67,108,864\) FLOP，折算约
+\(1.687\) TFLOP/s。
+
+\subsection{官方 2SM probe：构建修正、噪声识别和 clean run}
+
+先将 CUTLASS 官方
+\code{04\_mma\_tma\_2sm\_sm100.cu} 拷贝成
+\code{tcgen05\_sm103\_2sm\_probe.cu}，加入 quiet/event 接口。首次运行
+job 24212 直接退出：
+
+\begin{lstlisting}
+This example requires NVIDIA's Blackwell Architecture GPU
+with compute capability 100a.
+Found 10.3
+\end{lstlisting}
+
+这是教程的 host guard 只允许 minor \(\leq1\) 的遗留限制，而不是
+tcgen05 指令失败。将 guard 放宽到 10.x 后，job 24214 编译通过。
+
+修正后的第一次 2SM run 使用了 \(512\times1024\times64\)，但当时只有
+layout dump 被 quiet，TMA block 内的四个 multicast \code{printf} 仍然
+存在。job 24216 的 50-iteration 输出给出 \(0.241427\) ms；这个数比
+后续 clean run 大一个数量级，且日志重复出现
+\code{tma\_transaction\_bytes}、\code{tma\_mcast\_mask\_a/b} 和
+\code{mma\_mcast\_mask\_c}。由此将该结果判定为 I/O 噪声，不用于比较。
+
+补充 quiet guard 后，job 24218 rebuild，job 24219 运行：
+
+\begin{lstlisting}
+C1_TCGEN05_BENCH_ITERS=100 C1_TCGEN05_BENCH_WARMUP=20 \
+  srun --partition=gpu --gres=gpu:1 --time=00:10:00 \
+  ./tcgen05_sm103_2sm_probe 512 1024 64 \
+  > tcgen05_2sm_probe_run_24218.log 2>&1
+\end{lstlisting}
+
+clean 输出为：
+
+\begin{lstlisting}
+bench_iters=100 bench_warmup=20 bench_total_ms=3.35718 \
+  bench_iter_ms=0.0335718
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.
+\end{lstlisting}
+
+因此官方 2SM TMA probe 在同一大问题上是 \(0.0335718\) ms，约比
+1SM 的 \(0.039775\) ms 快 \(15.6\%\)，折算约 \(1.999\) TFLOP/s。
+加速并非 2 倍：2SM 的 TMA multicast、cluster barrier、TMEM
+allocation 和 epilogue 都是新的固定成本，且本 probe 的每线程寄存器
+数很高。
+
+\subsection{2SM state2：与 state update 对齐的最小形状}
+
+为排除“大问题和大 tile”的影响，在同一个 2SM source 中加入
+\code{C1\_TCGEN05\_STATE2}。该配置使用：
+
+\begin{lstlisting}
+SM100_MMA_F16BF16_2x1SM_SS<half_t, half_t, float,
+                           128, 128, Major::K, Major::K>
+K tile count = 1
+cluster_shape = (2, 1, 1)
+Layout_K_SW32_Atom
+\end{lstlisting}
+
+job 24223 编译无错误，job 24225 运行默认的 \(128\times128\times16\)
+问题：
+
+\begin{lstlisting}
+C1_TCGEN05_BENCH_ITERS=100 C1_TCGEN05_BENCH_WARMUP=20 \
+  srun --partition=gpu --gres=gpu:1 --time=00:10:00 \
+  ./tcgen05_sm103_2sm_state2 \
+  > tcgen05_2sm_state2_run_24223.log 2>&1
+\end{lstlisting}
+
+输出为：
+
+\begin{lstlisting}
+bench_iters=100 bench_warmup=20 bench_total_ms=1.99293 \
+  bench_iter_ms=0.0199293
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.
+\end{lstlisting}
+
+该 2SM state2 比 1SM 同形状的 \(0.0242883\) ms 快 \(17.9\%\)，但绝对
+吞吐只有约 \(26.31\) GFLOP/s，仍然是固定 launch/TMEM/store 成本主导的
+小问题。重要结果是：CUTLASS 的 2SM atom 确实可以在 B300 上表达
+\(128\times128\times16\)，而不是只能运行官方示例的 \(256\times256\)
+大 tile。
+
+\subsection{NCU 结构计数}
+
+三个 binary 均以同一组 lightweight metrics 采集：
+
+\begin{lstlisting}
+ncu --target-processes application-only --csv --page details \
+  -k regex:gemm_device \
+  --metrics launch__block_size,launch__grid_size, \
+launch__shared_mem_per_block_dynamic,launch__registers_per_thread, \
+sm__warps_active.avg.pct_of_peak_sustained_active, \
+dram__bytes_read.sum,dram__bytes_write.sum,gpu__time_duration.avg \
+  ./<probe> <M> <N> <K>
+\end{lstlisting}
+
+对应 Slurm jobs 为 24221（1SM state）、24222（官方 2SM）和 24226
+（2SM state2）。原始 CSV 分别保存为
+\code{results/tcgen05\_1sm\_ncu\_b300.csv}、
+\code{results/tcgen05\_2sm\_ncu\_b300.csv} 和
+\code{results/tcgen05\_2sm\_state2\_ncu\_b300.csv}。关键行如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l c c c c c c}
+\toprule
+probe & block & grid & registers/thread & dynamic smem & active warps & NCU time \\
+\midrule
+1SM \(512\times1024\times64\) & 128 & \(4\times8\) & 255 & 8,320 B & 6.22\% & 60.928 \(\mu\)s \\
+2SM \(512\times1024\times64\) & 128 & \(4\times4\) & 255 & 32,896 B & 6.23\% & 76.224 \(\mu\)s \\
+2SM state2 \(128\times128\times16\) & 128 & \(2\times1\) & 181 & 4,224 B & 6.14\% & 14.144 \(\mu\)s \\
+\bottomrule
+\end{tabular}
+\caption{B300 job 24221/24222/24226 的 NCU details。NCU replay 会改变
+kernel 时间，表中最后一列只用于结构定位；正式性能采用前述 CUDA events。}
+\end{table}
+
+NCU 给出两个设计边界。第一，通用 CuTe tutorial 的 1SM/官方 2SM
+实例化均达到 255 registers/thread；这解释了为什么只把 MMA atom 换成
+tcgen05 不会自动带来高 occupancy。第二，state2 的 \(2\)-CTA cluster
+和较窄 SW32 layout 将动态 shared memory 降到 4,224\,B、寄存器降到
+181/thread，但它只计算一个极小 tile，不能直接等价到完整
+\FlashKDA recurrence。小 probe 的部分 \code{dram\_\_bytes\_write} 在
+NCU CSV 中为零，是该轻量 replay 对极小 store/异步 epilogue 的计数限制；
+不能据此声称没有 global store，CPU exactness 和 event 结果均正常。
+
+\subsection{本轮结论和接入决策}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+problem & 1SM event (ms) & 2SM event (ms) & 2SM speedup \\
+\midrule
+\(128\times128\times16\) & 0.0242883 & 0.0199293 & 1.219\(\times\) \\
+\(512\times1024\times64\) & 0.0397750 & 0.0335718 & 1.185\(\times\) \\
+\bottomrule
+\end{tabular}
+\caption{同一 B300、同一 CUDA-event 接口下的 probe 对照；两行的
+CPU reference 均 exact。}
+\end{table}
+
+本轮达到的是“硬件路径可行性”目标，而不是 FlashKDA 端到端性能目标：
+
+\begin{itemize}
+\item 可行性：1SM 和 2SM tcgen05 均在 B300 exact 运行；2SM
+      \code{128x128x16} state2 也成功编译和运行；
+\item 潜力：2SM 在同形状小问题快 \(17.9\%\)，在大问题快 \(15.6\%\)；
+\item 限制：tcgen05 累加器必须经过 TMEM，2SM 还要求 peer CTA、
+      cluster barrier、TMA multicast 和不同的 epilogue；通用 probe
+      的 181--255 registers/thread 说明资源重构尚未完成；
+\item 迁移成本：FlashKDA K2 当前是每 CTA 192 threads、四个 warp 处理
+      \(16\times16\) 列块，并在寄存器中维护 recurrence。tcgen05
+      \(128\times128\) tile 需要重写 state/value layout、线程到 CTA
+      的映射和写回协议，不是模板参数或指令名替换。
+\end{itemize}
+
+因此本轮不把 2SM probe 接入完整 K2，也不改变 R4 的 opt-in 实现。性能
+测试结束后再次核对 B300 venv：
+
+\begin{lstlisting}
+<B300_REPO>/assignment02/.venv/bin/python - <<'PY'
+import importlib.metadata as m
+print(m.version("flash-kda"))
+PY
+# 0.0.1+baseline.r4
+\end{lstlisting}
+
+默认环境仍为 baseline，已有 R4 sliced branch 不会被 challenge 编译污染。
+第五轮的可审计成果是三个独立 probe、四份 clean event 日志、三份 NCU CSV
+以及本节的失败/修正/判定链条。下一轮若继续，优先级应是设计一个低寄存器、
+warp-specialized 的 2SM epilogue，或在完整 K2 上做一次仅替换 MMA/写回的
+小范围原型；在没有解决 TMEM 和 recurrence 状态布局之前，不应扩大到
+全量生产 kernel。
+
+\begin{record}{R5 结论}
+在 B300 上，2SM tcgen05 不是概念上不可用：最小
+\(128\times128\times16\) state2 已 exact，且比对应 1SM probe 快
+\(17.9\%\)。但是这个收益来自独立 GEMM 微内核，不能推导为 FlashKDA
+端到端加速；完整 K2 仍保持 baseline，远端环境版本为
+\code{0.0.1+baseline.r4}。因此作业目标“超过 baseline”在本轮仍未实现，
+但已把下一步的瓶颈从“tcgen05 是否能编译”收敛为“TMEM/epilogue/寄存器
+重构是否值得接入”。\end{record}
+
 \end{document}

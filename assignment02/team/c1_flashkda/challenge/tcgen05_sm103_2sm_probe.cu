@@ -71,35 +71,46 @@
 
 using namespace cute;
 
-// R5 microbenchmark mode uses the natural 128x128x16 state-update tile.
-// Without C1_TCGEN05_STATE this file remains the original 128x256x64 tutorial.
-#if defined(C1_TCGEN05_STATE)
-static constexpr int C1_STATE_M = 128;
-static constexpr int C1_STATE_N = 128;
-static constexpr int C1_STATE_K_TILES = 1;
+// Keep the official tutorial's structural code intact while allowing repeated
+// event timing without device-side CuTe layout dumps.
+#if defined(C1_TCGEN05_QUIET)
+#define print(...) do { } while (false)
+#endif
+
+#if defined(C1_TCGEN05_STATE2)
+static constexpr int C1_STATE2_M = 128;
+static constexpr int C1_STATE2_N = 128;
+static constexpr int C1_STATE2_K_TILES = 1;
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Tutorial 01: Simple Blackwell SM100 GEMM using a tcgen05.mma instruction
+// Tutorial 04: Blackwell SM100 GEMM with 2SM tcgen05.mma and 2SM Multicast TMA
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// The goal of this tutorial is to show the CuTe interface for tcgen05.mma and tcgen05.ld operations.
+
 // We will implement a GEMM operation: D (f32) = beta * C (F32) + alpha * A (F16) * B (F16) where:
 // - Matrix A is MxK, K-major (BLAS transpose T, row-major)
 // - Matrix B is NxK, K-major (BLAS transpose N, column-major)
 // - Matrices C and D are MxN, N-major (BLAS row-major)
 //
-// This GEMM kernel performs the following steps:
-// 1. Load A and B matrices from global memory (GMEM) to shared memory (SMEM) for one MmaTile
-//    using auto-vectorizing copy operations.
-// 2. Perform matrix multiply-accumulate (MMA) operations using tcgen05.mma instruction.
+// Key extensions to tutorial 03_mma_tma_multicast_sm100.cu:
+// 1. Introduce 2SM tcgen05.mma instructions
+// 2. Introduce 2SM TMA instructions
+// 3. Demonstrate TMA multicast pattern specialized for 2SM instructions for loading A and B matrices
+//
+// This GEMM kernel will perform the following steps:
+// 1. Load A and B matrices from GMEM to SMEM using Multicasted TMA.2SM load operations.
+// 2. Perform matrix multiply-accumulate (MMA) operations using 2SM tcgen05.mma instruction.
 // 3. Load completed accumulator from tensor memory (TMEM) to registers (RMEM) using tcgen05.ld.
 // 4. Read C matrix from global memory (GMEM) to register (RMEM).
 // 5. Apply alpha and beta scaling to the MMA accumulator and C matrix.
 // 6. Store D matrix from registers (RMEM) to global memory (GMEM).
 //
-// SM100 tcgen05.mma instructions operate as follows:
+// SM100 2SM tcgen05.mma instructions operate as follows:
+// - Mma is launched by only one SM
+//    With 2SM MMA instructions, only 1 of the 2 CTAs collaborating on MMA executes the instruction.
+//    We call the collaborating CTAs, peer CTAs. And the CTA executing the MMA instruction is called leader CTA.
 // - Read matrix A from SMEM or TMEM
 // - Read matrix B from SMEM
 // - Write accumulator to TMEM
@@ -112,7 +123,7 @@ static constexpr int C1_STATE_K_TILES = 1;
 // CuTe provides these descriptors transparently in the instruction and fragments, shown in this tutorial.
 //
 // The MMA details:
-// We use the tcgen05.mma.f16 instruction (F16xF16 = F32) that performs a 128x256x16 MMA
+// We use the tcgen05.mma.f16 instruction (F16xF16 = F32) that performs a 256x256x16 MMA
 // operation. F32 accumulator type is chosen since both C and D matrices use F32.
 // This example uses F16xF16 = F32 MMA where:
 // TypeA = cutlass::half_t;  // MMA A Data Type
@@ -133,7 +144,8 @@ struct SharedStorage
   alignas(128) cute::ArrayEngine<TypeA, cute::cosize_v<ASmemLayout>> A;
   alignas(128) cute::ArrayEngine<TypeB, cute::cosize_v<BSmemLayout>> B;
 
-  alignas(16) cute::uint64_t mma_barrier;   // Barrier to track MMA computation on SMEM
+  alignas(16) cute::uint64_t mma_barrier;  // Barrier to track MMA computation on SMEM
+  alignas(16) cute::uint64_t tma_barrier;  // Barrier to track TMA data transfers to SMEM
 
   alignas(16) cute::uint32_t tmem_base_ptr; // Base pointer for TMEM allocation
 
@@ -145,6 +157,7 @@ struct SharedStorage
 template <class SharedStorage,
           class ATensor, class BTensor, class CTensor, class DTensor,
           class MmaTiler_MNK, class TiledMMA, class ClusterShape_MNK,
+          class TmaAtomA, class TmaAtomB,
           class Alpha, class Beta>
 __global__ static
 void
@@ -155,6 +168,8 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
             MmaTiler_MNK mma_tiler,          // <MmaTile_M, MmaTile_N, MmaTile_K>
             TiledMMA tiled_mma,              // <    Mma_M,     Mma_N,     Mma_K>
             ClusterShape_MNK cluster_shape,  // (ClusterM, ClusterN, ClusterK)
+            CUTE_GRID_CONSTANT TmaAtomA const tma_atom_A,
+            CUTE_GRID_CONSTANT TmaAtomB const tma_atom_B,
             Alpha alpha, Beta beta)
 {
   // Step 1: The Prologue.
@@ -183,17 +198,15 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   Tensor gD = local_tile(mD, mma_tiler, mma_coord, Step<_1,_1, X>{});  // (MmaTile_M, MmaTile_N)
 
   if (thread0()) {
-#if !defined(C1_TCGEN05_QUIET)
-    print("mA:\t"); print(mA); print("\n");   // mA:   gmem_ptr[16b](GMEM_ADDR_A) o (512,256):(256,_1)
-    print("mB:\t"); print(mB); print("\n");   // mB:   gmem_ptr[16b](GMEM_ADDR_B) o (1024,256):(256,_1)
+    print("mA:\t"); print(mA); print("\n");   // mA:   ArithTuple(_0,_0) o (512,256):(_1@1,_1@0)
+    print("mB:\t"); print(mB); print("\n");   // mB:   ArithTuple(_0,_0) o (1024,256):(_1@1,_1@0)
     print("mC:\t"); print(mC); print("\n");   // mC:   gmem_ptr[32b](GMEM_ADDR_C) o (512,1024):(1024,_1)
     print("mD:\t"); print(mD); print("\n");   // mD:   gmem_ptr[32b](GMEM_ADDR_D) o (512,1024):(1024,_1)
 
-    print("gA:\t"); print(gA); print("\n");   // gA:   gmem_ptr[16b](GMEM_ADDR_A + offset_for_mma_tile) o (_128,_64,4):(256,_1,_64)
-    print("gB:\t"); print(gB); print("\n");   // gB:   gmem_ptr[16b](GMEM_ADDR_B + offset_for_mma_tile) o (_256,_64,4):(_1,256,16384)
+    print("gA:\t"); print(gA); print("\n");   // gA:   ArithTuple(_0,0) o (_128,_64,4):(_1@1,_1@0,_64@0)
+    print("gB:\t"); print(gB); print("\n");   // gB:   ArithTuple(_0,0) o (_256,_64,4):(_1@1,_1@0,_64@0)
     print("gC:\t"); print(gC); print("\n");   // gC:   gmem_ptr[32b](GMEM_ADDR_C + offset_for_mma_tile) o (_128,_256):(256,_1)
     print("gD:\t"); print(gD); print("\n");   // gD:   gmem_ptr[32b](GMEM_ADDR_D + offset_for_mma_tile) o (_128,_256):(256,_1)
-#endif
   } __syncthreads();
 
   // The SMEM tensors
@@ -209,8 +222,6 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   //
   // Mma partitioning for A and B
   //
-  // Note: Partitioned tensors use tXgY naming convention:
-  //  tXgY -> The partitioning pattern tX applied to tensor gY
 
   auto mma_v = get<0>(mma_coord_vmnk);
   ThrMMA cta_mma = tiled_mma.get_slice(mma_v);   // Use Peer CTA coordinate
@@ -220,12 +231,10 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   Tensor tCgD = cta_mma.partition_C(gD);         // (MmaC, NumMma_M, NumMma_N)
 
   if (thread0()) {
-#if !defined(C1_TCGEN05_QUIET)
-    print("tCgA:\t"); print(tCgA); print("\n");  // tCgA:   gmem_ptr[16b](GMEM_ADDR_A + offset_for_mma_tile + offset_for_mma) o ((_128,_16),_1,_4,4):((256,_1),_0,_16,_64)
-    print("tCgB:\t"); print(tCgB); print("\n");  // tCgB:   gmem_ptr[16b](GMEM_ADDR_B + offset_for_mma_tile + offset_for_mma) o ((_256,_16),_1,_4,4):((_1,256),_0,4096,16384)
+    print("tCgA:\t"); print(tCgA); print("\n");  // tCgA:   ArithTuple(_0,0) o ((_128,_16),_1,_4,4):((_1@1,_1@0),_0,_16@0,_64@0)
+    print("tCgB:\t"); print(tCgB); print("\n");  // tCgB:   ArithTuple(_0,0) o ((_256,_16),_1,_4,4):((_1@1,_1@0),_0,_16@0,_64@0)
     print("tCgC:\t"); print(tCgC); print("\n");  // tCgC:   gmem_ptr[32b](GMEM_ADDR_C + offset_for_mma_tile + offset_for_mma) o ((_128,_256),_1,_1):((256,_1),_0,_0)
     print("tCgD:\t"); print(tCgD); print("\n");  // tCgD:   gmem_ptr[32b](GMEM_ADDR_D + offset_for_mma_tile + offset_for_mma) o ((_128,_256),_1,_1):((256,_1),_0,_0)
-#endif
   } __syncthreads();
 
   // MMA Fragment Allocation
@@ -245,7 +254,7 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   uint32_t elect_one_thr  = cute::elect_one_sync();
   uint32_t elect_one_warp = (threadIdx.x / 32 == 0);
 
-  using TmemAllocator = cute::TMEM::Allocator1Sm;
+  using TmemAllocator = cute::TMEM::Allocator2Sm;
   TmemAllocator tmem_allocator{};
 
   if (elect_one_warp) {
@@ -255,23 +264,83 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   tCtAcc.data() = shared_storage.tmem_base_ptr;
 
   if (thread0()) {
-#if !defined(C1_TCGEN05_QUIET)
     print("tCsA:\t"); print(tCsA); print("\n");     // tCsA:   Sw<3,4,3>_smem_ptr[16b](SMEM_ADDR_A) o ((_128,_16),_1,_4):((_64,_1),_0,_16)
     print("tCsB:\t"); print(tCsB); print("\n");     // tCsB:   Sw<3,4,3>_smem_ptr[16b](SMEM_ADDR_B) o ((_256,_16),_1,_4):((_64,_1),_0,_16)
     print("tCrA:\t"); print(tCrA); print("\n");     // tCrA:   UMMA::DescriptorIterator o (_1,_1,_4):(_0,_0,_2)
     print("tCrB:\t"); print(tCrB); print("\n");     // tCrB:   UMMA::DescriptorIterator o (_1,_1,_4):(_0,_0,_2)
     print("tCtAcc:\t"); print(tCtAcc); print("\n"); // tCtAcc: tmem_[32b](TMEM_ADDR) o ((_128,_256),_1,_1):((_65536,_1),_0,_0)
+  } __syncthreads();
+
+  // TMA Setup
+  //
+  //   These are TMA partitionings, which have a dedicated custom partitioner.
+  //   In this example, the TMA multicasts the loads across multiple CTAs.
+  //   Loads of A are multicasted along the N dimension of the cluster_shape_VMNK and
+  //   Loads of B are multicasted along the M dimension of the cluster_shape_VMNK.
+  //      Any multicasting must be in conformance with tma_x constructed with make_tma_atom on host.
+  //   For A tensor: The group_modes<0,3> transforms the (MmaA, NumMma_M, NumMma_K, Tiles_K)-shaped tensor
+  //      into ((MmaA, NumMma_M, NumMma_K), Tiles_K). The partitioning only pays attention to mode-0, the MMA Tile MK.
+  //   For B tensor: The group_modes<0,3> transforms the (MmaB, NumMma_M, NumMma_K, Tiles_K)-shaped tensor
+  //      into ((MmaB, NumMma_M, NumMma_K), Tiles_K). The partitioning only pays attention to mode-0, the MMA Tile NK.
+  //   Simply put, the TMA will be responsible for everything in mode-0 with a single call to cute::copy.
+  //   The tma_partition reorders and offsets mode-0 according to the tma_x atom and the multicast info.
+
+  // Each CTA with the same m-coord will load a portion of A
+  // Each CTA with the same n-coord will load a portion of B
+  // Computation of the multicast masks must take into account the Peer CTA for TMA.2SM
+
+  // Construct the CTA-in-Cluster coordinate for multicasting
+  auto cta_in_cluster_coord_vmnk = cluster_layout_vmnk.get_flat_coord(int(cute::block_rank_in_cluster()));
+  auto elect_one_cta  = get<0>(cta_in_cluster_coord_vmnk) == Int<0>{};
+
+  // Project the cluster_layout for tma_A along the N-modes
+  auto [tAgA, tAsA] = tma_partition(tma_atom_A,
+                                    get<2>(cta_in_cluster_coord_vmnk),          // The CTA coordinate along N mode of the cluster
+                                    make_layout(size<2>(cluster_layout_vmnk)),  // The CTA layout along N mode of the cluster
+                                    group_modes<0,3>(tCsA), group_modes<0,3>(tCgA));
+
+  // Project the cluster_layout for tma_B along the M-modes
+  auto [tBgB, tBsB] = tma_partition(tma_atom_B,
+                                    get<1>(cta_in_cluster_coord_vmnk),          // The CTA coordinate along M mode of the cluster
+                                    make_layout(size<1>(cluster_layout_vmnk)),  // The CTA layout along M mode of the cluster
+                                    group_modes<0,3>(tCsB), group_modes<0,3>(tCgB));
+
+  // Project the cluster_layout and cta_coord along the N-mode to determine the multicast mask for A
+  uint16_t tma_mcast_mask_a = create_tma_multicast_mask<2>(cluster_layout_vmnk, cta_in_cluster_coord_vmnk);
+  // Project the cluster_layout and cta_coord along the M-mode to determine the multicast mask for B
+  uint16_t tma_mcast_mask_b = create_tma_multicast_mask<1>(cluster_layout_vmnk, cta_in_cluster_coord_vmnk);
+  // Project the cluster_layout and cta_coord along the VM + VN-modes to determine the multicast mask for C
+  uint16_t mma_mcast_mask_c = create_tma_multicast_mask<0,1>(cluster_layout_vmnk, cta_in_cluster_coord_vmnk) |
+                              create_tma_multicast_mask<0,2>(cluster_layout_vmnk, cta_in_cluster_coord_vmnk);
+
+  // Calculate total bytes that TMA will transfer each tile to track completion, accounting for TMA.2SM
+  int tma_transaction_bytes = size<0>(cluster_layout_vmnk) * sizeof(make_tensor_like(tAsA))
+                            + size<0>(cluster_layout_vmnk) * sizeof(make_tensor_like(tBsB));
+
+  if (thread0()) {
+#if !defined(C1_TCGEN05_QUIET)
+    print("tAgA:\t"); print(tAgA); print("\n");  // tAgA:   ArithTuple(_0,0) o (((_64,_128),_1),4):(((_1@0,_1@1),_0),_64@0)
+    print("tAsA:\t"); print(tAsA); print("\n");  // tAsA:   Sw<3,4,3>_smem_ptr[16b](SMEM_ADDR_A) o ((_8192,_1)):((_1,_0))
+    print("tBgB:\t"); print(tBgB); print("\n");  // tBgB:   ArithTuple(_0,0) o (((_64,_256),_1),4):(((_1@0,_1@1),_0),_64@0)
+    print("tBsB:\t"); print(tBsB); print("\n");  // tBsB:   Sw<3,4,3>_smem_ptr[16b](SMEM_ADDR_B) o ((_16384,_1)):((_1,_0))
+    printf("tma_transaction_bytes: %d\n", tma_transaction_bytes);
+    printf("tma_mcast_mask_a: %x\n", tma_mcast_mask_a);
+    printf("tma_mcast_mask_b: %x\n", tma_mcast_mask_b);
+    printf("mma_mcast_mask_c: %x\n", mma_mcast_mask_c);
 #endif
   } __syncthreads();
 
-
   // Barrier Initialization
-  // Barriers in SMEM initialized by a single thread.
+  // Barriers in SMEM should be initialized by a single thread.
   if (elect_one_warp && elect_one_thr) {
-    cute::initialize_barrier(shared_storage.mma_barrier, /* num_ctas */ 1);
+    // The number of CTAs that participates in multicast operation with this CTA (for both A and B matrices)
+    int num_mcast_participants = size<1>(cluster_layout_vmnk) + size<2>(cluster_layout_vmnk) - 1;
+    cute::initialize_barrier(shared_storage.mma_barrier, /* num_ctas */ num_mcast_participants);
+    cute::initialize_barrier(shared_storage.tma_barrier, /* num_threads */ 1);
   }
   int mma_barrier_phase_bit = 0;  // Each barrier has an associated phase_bit.
-  __syncthreads();                // Make sure all threads observe barrier initialization.
+  int tma_barrier_phase_bit = 0;  // Each barrier has an associated phase_bit.
+  cute::cluster_sync();           // Make sure all CTAs in Cluster observe barrier init and TMEM alloc.
 
   // Step 2: The Mainloop.
 
@@ -283,30 +352,40 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   {
     // Step 2a: Load A and B tiles
 
-    // Using auto-vectorized copy operation:
-    // - Utilizes 128 threads for parallel data transfer
-    // - Copy operations are distributed efficiently across all threads
-    // - CuTe can automatically determine optimal vector width
-    cooperative_copy<128>(threadIdx.x, tCgA(_,_,_,k_tile), tCsA); // Load MmaTile_M x MmaTile_K A tile
-    cooperative_copy<128>(threadIdx.x, tCgB(_,_,_,k_tile), tCsB); // Load MmaTile_N x MmaTile_K B tile
+    // TMA Load Operations:
+    // - Execute asynchronous TMA loads with single thread
+    // - Both peer and leader CTAs initiate TMA loads
+    // - Set expected transaction bytes. For 2SM TMA instructions, the transaction bytes counts both CTAs.
+    // - Although TMAs are initiated by both peer and leader CTAs, the barrier is only set and waited by the leader CTA.
+    // - Initiate asynchronous transfers with a multicast mask that includes all CTAs that participate in multicast.
+    if (elect_one_warp && elect_one_thr) { // TMA loads are executed by one thread
+      if (elect_one_cta) { // Only the leader CTA waits for TMA transactions
+        cute::set_barrier_transaction_bytes(shared_storage.tma_barrier, tma_transaction_bytes); // Set the expected transaction bytes for the TMA loads
+      }
+      copy(tma_atom_A.with(shared_storage.tma_barrier,tma_mcast_mask_a), tAgA(_,k_tile), tAsA); // Load MmaTile_M x MmaTile_K A tile
+      copy(tma_atom_B.with(shared_storage.tma_barrier,tma_mcast_mask_b), tBgB(_,k_tile), tBsB); // Load MmaTile_N x MmaTile_K B tile
+    }
 
     // Step 2b: Execute the MMAs for this tile
 
-    // Wait for loads to SMEM to complete with __syncthreads()
-    __syncthreads();
+    if (elect_one_cta) {
+      // Wait for TMA loads to complete on leader CTAs
+      cute::wait_barrier(shared_storage.tma_barrier, tma_barrier_phase_bit);
+      tma_barrier_phase_bit ^= 1;
 
-    // tcgen05.mma instructions require single-thread execution:
-    // - Only one warp performs the MMA-related loop operations
-    // - CuTe operations internally manage the single-thread execution of tcgen05.mma and tcgen05.cp
-    // - No explicit elect_one_sync region is needed from the user
-    if (elect_one_warp) {
-      // Execute a MmaTile_M x MmaTile_N x MmaTile_K GEMM
-      for (int k_block = 0; k_block < size<2>(tCrA); ++k_block) {
-        gemm(tiled_mma, tCrA(_,_,k_block), tCrB(_,_,k_block), tCtAcc);
-        tiled_mma.accumulate_ = UMMA::ScaleOut::One;
+      // tcgen05.mma instructions require single-thread execution:
+      // - Only one warp performs the MMA-related loop operations
+      // - CuTe operations internally manage the single-thread execution of tcgen05.mma and tcgen05.cp
+      // - No explicit elect_one_sync region is needed from the user
+      if (elect_one_warp) {
+        // Execute a MmaTile_M x MmaTile_N x MmaTile_K GEMM
+        for (int k_block = 0; k_block < size<2>(tCrA); ++k_block) {
+            gemm(tiled_mma, tCrA(_,_,k_block), tCrB(_,_,k_block), tCtAcc);
+            tiled_mma.accumulate_ = UMMA::ScaleOut::One;
+        }
+        // Ensure MMAs are completed, only then we can reuse the A and B SMEM.
+        cutlass::arch::umma_arrive_multicast_2x1SM(&shared_storage.mma_barrier, mma_mcast_mask_c); // All multicasting CTAs encoded in mask.
       }
-      // Ensure MMAs are completed, only then we can reuse the A and B SMEM.
-      cutlass::arch::umma_arrive(&shared_storage.mma_barrier);
     }
     // Wait MMAs to complete to avoid overwriting the A and B SMEM.
     cute::wait_barrier(shared_storage.mma_barrier, mma_barrier_phase_bit);
@@ -387,34 +466,32 @@ void gemm_host_f16xf16_f32_f32_tnt(TypeA const* device_ptr_A, LayoutA layout_A,
   // larger TiledMma from the given mma instruction.
   // See cute/arch/mma_sm100_umma.hpp for all tcgen05.mma instructions
   TiledMMA tiled_mma = make_tiled_mma(
-#if defined(C1_TCGEN05_STATE)
-      SM100_MMA_F16BF16_SS<TypeA, TypeB, TypeC, C1_STATE_M, C1_STATE_N,
-                           UMMA::Major::K, UMMA::Major::K>{}
+#if defined(C1_TCGEN05_STATE2)
+      SM100_MMA_F16BF16_2x1SM_SS<TypeA, TypeB, TypeC, C1_STATE2_M, C1_STATE2_N,
+                                 UMMA::Major::K, UMMA::Major::K>{}
 #else
-      SM100_MMA_F16BF16_SS<TypeA, TypeB, TypeC, 128, 256,
-                           UMMA::Major::K, UMMA::Major::K>{}
+      SM100_MMA_F16BF16_2x1SM_SS<TypeA, TypeB, TypeC, 256, 256,
+                                 UMMA::Major::K, UMMA::Major::K>{}
 #endif
   );
 
   // We can also print and inspect the tiled_mma
-#if !defined(C1_TCGEN05_QUIET)
   print(tiled_mma);
-#endif
   // TiledMMA
-  //   ThrLayoutVMNK:  (_1,_1,_1,_1):(_0,_0,_0,_0)
+  //   ThrLayoutVMNK:  (_2,_1,_1,_1):(_1,_0,_0,_0)
   //   PermutationMNK: (_,_,_)
   // MMA_Atom
-  //   ThrID:      _1:_0
-  //   Shape_MNK:  (_128,_256,_16)                      // MmaM, MmaN, MmaK instruction size
-  //   LayoutA_TV: (_1,(_128,_16)):(_0,(_1,_128))       // TV -> MmaCoordinate mapping for A matrix
-  //   LayoutB_TV: (_1,(_256,_16)):(_0,(_1,_256))       // TV -> MmaCoordinate mapping for B matrix
-  //   LayoutC_TV: (_1,(_128,_256)):(_0,(_1,_128))      // TV -> MmaCoordinate mapping for C matrix
+  //   ThrID:      _2:_1
+  //   Shape_MNK:  (_256,_256,_16)                      // MmaM, MmaN, MmaK (MmaK is constant for each instr.)
+  //   LayoutA_TV: (_2,(_128,_16)):(_128,(_1,_256))     // TV -> MmaCoordinate mapping for A matrix
+  //   LayoutB_TV: (_2,(_128,_16)):(_128,(_1,_256))     // TV -> MmaCoordinate mapping for B matrix
+  //   LayoutC_TV: (_2,(_128,_256)):(_128,(_1,_256))    // TV -> MmaCoordinate mapping for B matrix
 
   // Define MMA tiler sizes (static)
   auto bM = tile_size<0>(tiled_mma);             // MMA Tile M. We'll use 1 MMAs per MMA Tile M.
   auto bN = tile_size<1>(tiled_mma);             // MMA Tile N. We'll use 1 MMAs per MMA Tile M.
-#if defined(C1_TCGEN05_STATE)
-  auto bK = tile_size<2>(tiled_mma) * Int<C1_STATE_K_TILES>{};
+#if defined(C1_TCGEN05_STATE2)
+  auto bK = tile_size<2>(tiled_mma) * Int<C1_STATE2_K_TILES>{};
 #else
   auto bK = tile_size<2>(tiled_mma) * Int<4>{};  // MMA Tile K. We'll use 4 MMAs per MMA Tile K. For 16b types, tcgen05.mma has K16.
 #endif
@@ -453,17 +530,13 @@ void gemm_host_f16xf16_f32_f32_tnt(TypeA const* device_ptr_A, LayoutA layout_A,
   auto mma_shape_B = partition_shape_B(tiled_mma, make_shape(size<1>(mma_tiler), size<2>(mma_tiler)));
 
   // Print and inspect mma_shape_A, and mma_shape_B for this example.
-#if !defined(C1_TCGEN05_QUIET)
   print("mma_shape_A:\t"); print(mma_shape_A); print("\n");  // mma_shape_A:  ((_128,_16),_1,_4)
   print("mma_shape_B:\t"); print(mma_shape_B); print("\n");  // mma_shape_B:  ((_256,_16),_1,_4)
-#endif
 
   // A and B tensors are swizzled in SMEM to improve MMA performance.
   //  * However, expressing swizzled layouts is very hard.
   //  * CuTe provides tile_to_mma_shape functions for SM100 to create swizzled layouts for post-partitioned Mma Shapes
-#if defined(C1_TCGEN05_STATE)
-  // The 16-element K tile fits the 32-byte K-major swizzle atom. SW64/SW128
-  // require a wider K extent and fail CuTe's tile divisibility check here.
+#if defined(C1_TCGEN05_STATE2)
   auto sA_layout = UMMA::tile_to_mma_shape(UMMA::Layout_K_SW32_Atom<TypeA>{}, mma_shape_A);
   auto sB_layout = UMMA::tile_to_mma_shape(UMMA::Layout_K_SW32_Atom<TypeB>{}, mma_shape_B);
 #else
@@ -472,18 +545,62 @@ void gemm_host_f16xf16_f32_f32_tnt(TypeA const* device_ptr_A, LayoutA layout_A,
 #endif
 
   // Print and inspect sA_layout and sB_layout for this example.
-#if !defined(C1_TCGEN05_QUIET)
   print("sA_layout:\t"); print(sA_layout); print("\n");      // sA_layout:   Sw<3,4,3> o smem_ptr[16b](unset) o ((_128,_16),_1,_4):((_64,_1),_0,_16)
   print("sB_layout:\t"); print(sB_layout); print("\n");      // sB_layout:   Sw<3,4,3> o smem_ptr[16b](unset) o ((_256,_16),_1,_4):((_64,_1),_0,_16)
-#endif
 
   // Now we can find the SMEM allocation size
   using SMEMStorage = SharedStorage<TypeA, TypeB, decltype(sA_layout), decltype(sB_layout)>;
 
+  //
+  // TMA Descriptor Creation (Host Side)
+  //
+
   // The cluster shape and layout
-  auto cluster_shape = make_shape(Int<1>{}, Int<1>{}, Int<1>{});
+#if defined(C1_TCGEN05_STATE2)
+  auto cluster_shape = make_shape(Int<2>{}, Int<1>{}, Int<1>{});
+#else
+  auto cluster_shape = make_shape(Int<4>{}, Int<4>{}, Int<1>{});
+#endif
   Layout cluster_layout_vmnk = tiled_divide(make_layout(cluster_shape),
                                             make_tile(typename decltype(tiled_mma)::AtomThrID{}));
+
+  // SM100 interface for creating TMA loads.
+  Copy_Atom tma_atom_A = make_tma_atom_A_sm100(
+      SM100_TMA_2SM_LOAD_MULTICAST{}, // TMA load operation -- Multicasting 2SM instruction.
+      mA,                             // Source GMEM tensor
+      sA_layout,                      // Destination SMEM layout
+      mma_tiler,                      // MmaTiler_MNK. Unlike Sm90 interface where the tiler only included M and K modes.
+      tiled_mma,                      // Sm100 also requires the TiledMma to perform CTA-level partitioning.
+      cluster_layout_vmnk);           // ClusterLayout_VMNK. Unlike Sm90 interface where only the multicasting mode is passed.
+                                      //   We have make_tma_atom_[A|B]_sm100 and which determines the multicast mode.
+  Tensor mA_tma = tma_atom_A.get_tma_tensor(shape(mA));   // (Gemm_M, Gemm_K)
+
+  print("tma_atom_A:\t"); print(tma_atom_A); print("\n");
+  // tma_atom_A:     Copy_Atom
+  //  ThrID:        _2:_1
+  //  ValLayoutSrc: (_2,_8192):(_8192,_1)
+  //  ValLayoutDst: (_2,_8192):(_8192,_1)
+  //  ValLayoutRef: (_2,_8192):(_8192,_1)
+  //  ValueType:    16b
+
+  // SM100 interface for creating TMA loads.
+  Copy_Atom tma_atom_B = make_tma_atom_B_sm100(
+    SM100_TMA_2SM_LOAD_MULTICAST{}, // TMA load operation -- Multicasting 2SM instruction.
+    mB,                             // Source GMEM tensor
+    sB_layout,                      // Destination SMEM layout
+    mma_tiler,                      // MmaTiler_MNK. Unlike Sm90 interface where the tiler only included M and K modes.
+    tiled_mma,                      // Sm100 also requires the TiledMma to perform CTA-level partitioning.
+    cluster_layout_vmnk);           // ClusterLayout_VMNK. Unlike Sm90 interface where only the multicasting mode is passed.
+                                    //   We have make_tma_atom_[A|B]_sm100 and which determines the multicast mode.
+  Tensor mB_tma = tma_atom_B.get_tma_tensor(shape(mB));   // (Gemm_N, Gemm_K)
+
+  print("tma_atom_B:\t"); print(tma_atom_B); print("\n");
+  // tma_atom_B:     Copy_Atom
+  // ThrID:        _2:_1
+  // ValLayoutSrc: (_2,_8192):(_8192,_1)
+  // ValLayoutDst: (_2,_8192):(_8192,_1)
+  // ValLayoutRef: (_2,_8192):(_8192,_1)
+  // ValueType:    16b
 
   ////////////////////////////////////////////////////////////
   //
@@ -495,11 +612,13 @@ void gemm_host_f16xf16_f32_f32_tnt(TypeA const* device_ptr_A, LayoutA layout_A,
   dim3 dimCluster(size<0>(cluster_shape), size<1>(cluster_shape), size<2>(cluster_shape));
   dim3 dimGrid(size(ceil_div(Gemm_M, bM * size<1>(cluster_layout_vmnk))) * dimCluster.x,
                size(ceil_div(Gemm_N, bN * size<2>(cluster_layout_vmnk))) * dimCluster.y);
+
   int  smemBytes = sizeof(SMEMStorage);
 
   auto* kernel_ptr = &gemm_device<SMEMStorage,
-                                  decltype(mA), decltype(mB), decltype(mC), decltype(mD),
+                                  decltype(mA_tma), decltype(mB_tma), decltype(mC), decltype(mD),
                                   decltype(mma_tiler), decltype(tiled_mma), decltype(cluster_shape),
+                                  decltype(tma_atom_A), decltype(tma_atom_B), // Includes the TMA descriptor.
                                   Alpha, Beta>;
 
   // Set kernel attributes (set SMEM)
@@ -514,8 +633,9 @@ void gemm_host_f16xf16_f32_f32_tnt(TypeA const* device_ptr_A, LayoutA layout_A,
 
   cutlass::ClusterLaunchParams params = {dimGrid, dimBlock, dimCluster, smemBytes};
   cutlass::Status status = cutlass::launch_kernel_on_cluster(params, (void const*) kernel_ptr,
-                                                             mA, mB, mC, mD,
+                                                             mA_tma, mB_tma, mC, mD,
                                                              mma_tiler, tiled_mma, cluster_shape,
+                                                             tma_atom_A, tma_atom_B,
                                                              alpha, beta);
   CUTE_CHECK_LAST();
 
@@ -539,30 +659,30 @@ int main(int argc, char** argv)
   }
 
   if ((props.major != 10) || (props.major == 10 && props.minor > 9)) {
-    std::cerr << "This example requires NVIDIA's Blackwell Architecture GPU with compute capability 100a." << std::endl;
+    std::cerr << "This example requires NVIDIA's Blackwell Architecture GPU with compute capability 10.x." << std::endl;
     std::cerr << "  Found " << props.major << "." << props.minor << std::endl;
     return -1;
   }
 
 #if defined(CUTLASS_ARCH_MMA_SM100_SUPPORTED)
 
-#if defined(C1_TCGEN05_STATE)
-  int Gemm_M = C1_STATE_M;
-  int Gemm_N = C1_STATE_N;
-  int Gemm_K = C1_STATE_K_TILES * 16;
+#if defined(C1_TCGEN05_STATE2)
+  int Gemm_M = C1_STATE2_M;
+  int Gemm_N = C1_STATE2_N;
+  int Gemm_K = C1_STATE2_K_TILES * 16;
 #else
   int Gemm_M = 512;
 #endif
   if (argc >= 2)
     sscanf(argv[1], "%d", &Gemm_M);
 
-#if !defined(C1_TCGEN05_STATE)
+#if !defined(C1_TCGEN05_STATE2)
   int Gemm_N = 1024;
 #endif
   if (argc >= 3)
     sscanf(argv[2], "%d", &Gemm_N);
 
-#if !defined(C1_TCGEN05_STATE)
+#if !defined(C1_TCGEN05_STATE2)
   int Gemm_K = 256;
 #endif
   if (argc >= 4)
@@ -634,8 +754,6 @@ int main(int argc, char** argv)
                                 device_D.data().get(), layout_D,
                                 alpha, beta);
 
-  // Optional steady-state device timing. The helper launches on the default stream;
-  // CUDA events cover the queued kernel work while excluding host setup.
   int bench_iters = 0;
   int bench_warmup = 5;
   if (const char* env = std::getenv("C1_TCGEN05_BENCH_ITERS")) {

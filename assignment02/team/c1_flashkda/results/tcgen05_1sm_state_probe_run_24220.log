@@ -1,0 +1,15 @@
+srun: job 24220 queued and waiting for resources
+srun: job 24220 has been allocated resources
+host_tensor_A:	ptr[16b](0x59243e7c1cd0) o (512,64):(64,_1)
+host_tensor_B:	ptr[16b](0x59243e7d1ce0) o (1024,64):(64,_1)
+host_tensor_C:	ptr[32b](0x7530e9d4a010) o (512,1024):(1024,_1)
+bench_iters=100 bench_warmup=20 bench_total_ms=3.9775 bench_iter_ms=0.039775
+Matrix A: 512x64 of half_t
+Matrix B: 1024x64 of half_t
+Matrix C: 512x1024 of float
+Infinity norm of A: 4.600000e+01
+Infinity norm of B: 4.400000e+01
+Infinity norm of C: 3.983000e+03
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.

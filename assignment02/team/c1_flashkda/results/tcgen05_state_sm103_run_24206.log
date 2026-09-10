@@ -1,0 +1,15 @@
+srun: job 24207 queued and waiting for resources
+srun: job 24207 has been allocated resources
+host_tensor_A:	ptr[16b](0x634f50f2cd00) o (128,16):(16,_1)
+host_tensor_B:	ptr[16b](0x634f50f57c50) o (128,16):(16,_1)
+host_tensor_C:	ptr[32b](0x634f50f83cd0) o (128,128):(128,_1)
+bench_iters=100 bench_warmup=10 bench_total_ms=2.42883 bench_iter_ms=0.0242883
+Matrix A: 128x16 of half_t
+Matrix B: 128x16 of half_t
+Matrix C: 128x128 of float
+Infinity norm of A: 1.200000e+01
+Infinity norm of B: 1.300000e+01
+Infinity norm of C: 2.650000e+02
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.

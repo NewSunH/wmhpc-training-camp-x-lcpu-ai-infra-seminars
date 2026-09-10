@@ -53,3 +53,17 @@ git；报告中的结论同时记录了关键计数和指标。
 - `vsplit_sliced_baseline_build_b300.log`：第四轮 job 23571 的 GPU-backed
   baseline restore，关闭 `FLASH_KDA_C1_VSPLIT_K2` 后安装
   `0.0.1+baseline.r4`；远程绝对路径已替换为 `<B300_REPO>`。
+- `tcgen05_state_sm103_run_24206.log`：第五轮 1SM `128x128x16` state-update
+  probe；B300 上 warmup=10、event iterations=100，单 tile 为
+  `0.0242883 ms`，CPU reference exact。
+- `tcgen05_1sm_state_probe_run_24220.log`、`tcgen05_2sm_state2_run_24223.log`：
+  同一 `128x128x16` 问题的 1SM/2SM 对照，分别为 `0.0242883 ms` 和
+  `0.0199293 ms`，两者均 exact；后者使用 cluster `(2,1,1)`。
+- `tcgen05_2sm_probe_run_24218.log`：官方 2SM TMA probe 在相同
+  `512x1024x64` 问题上的 clean benchmark，`0.0335718 ms`，CPU reference
+  exact；1SM 对照为 `tcgen05_1sm_state_probe_run_24220.log` 中的
+  `0.039775 ms`。
+- `tcgen05_{1sm,2sm,2sm_state2}_ncu_b300.csv`：第五轮 lightweight NCU
+  details。1SM state probe 为 255 registers/thread、8,320 B dynamic smem；
+  官方 2SM 为 255/32,896 B；最小 2SM state2 降至 181/4,224 B。NCU 的
+  `gpu__time_duration` 只用于结构观察，正式比较使用 CUDA events。
