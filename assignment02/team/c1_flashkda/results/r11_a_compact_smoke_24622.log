@@ -1,0 +1,34 @@
+Traceback (most recent call last):
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/challenge/vsplit_native_smoke.py", line 19, in <module>
+    from tests.torch_ref import torch_ref  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA/tests/torch_ref.py", line 32, in <module>
+    sigmoid_ext = load_inline(
+                  ^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2285, in load_inline
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2382, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2496, in _write_ninja_file_and_build_library
+    verify_ninja_availability()
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2562, in verify_ninja_availability
+    raise RuntimeError("Ninja is required to load C++ extensions (pip install ninja to get it)")
+RuntimeError: Ninja is required to load C++ extensions (pip install ninja to get it)
+Traceback (most recent call last):
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/challenge/vsplit_native_extended_smoke.py", line 25, in <module>
+    from tests.torch_ref import torch_ref  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA/tests/torch_ref.py", line 32, in <module>
+    sigmoid_ext = load_inline(
+                  ^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2285, in load_inline
+    return _jit_compile(
+           ^^^^^^^^^^^^^
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2382, in _jit_compile
+    _write_ninja_file_and_build_library(
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2496, in _write_ninja_file_and_build_library
+    verify_ninja_availability()
+  File "/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/lib/python3.12/site-packages/torch/utils/cpp_extension.py", line 2562, in verify_ninja_availability
+    raise RuntimeError("Ninja is required to load C++ extensions (pip install ninja to get it)")
+RuntimeError: Ninja is required to load C++ extensions (pip install ninja to get it)

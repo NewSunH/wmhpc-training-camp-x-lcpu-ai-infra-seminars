@@ -56,6 +56,11 @@ def get_c1_direct_output_vec_args():
     return ["-DC1_K2_DIRECT_OUTPUT_VEC=1"] if is_flag_set("FLASH_KDA_C1_DIRECT_OUTPUT_VEC") else []
 
 
+def get_c1_compact_direct_storage_args():
+    """Omit the K2 output ring only for the opt-in direct-output R11-A probe."""
+    return ["-DC1_K2_COMPACT_DIRECT_STORAGE=1"] if is_flag_set("FLASH_KDA_C1_COMPACT_DIRECT_STORAGE") else []
+
+
 SUPPORTED_CUDA_ARCHS = ["90a", "100a", "103a", "120a"]
 
 
@@ -127,6 +132,7 @@ ext_modules = [
                 *get_c1_fuse_out_add_args(),
                 *get_c1_direct_output_args(),
                 *get_c1_direct_output_vec_args(),
+                *get_c1_compact_direct_storage_args(),
             ],
         },
     )

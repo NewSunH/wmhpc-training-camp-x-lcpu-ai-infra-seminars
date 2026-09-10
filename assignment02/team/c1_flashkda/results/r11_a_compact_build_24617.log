@@ -1,0 +1,8 @@
+Resolved 1 package in 1.76s
+   Building flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+      Built flash-kda @ file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA
+Prepared 1 package in 39.08s
+Uninstalled 1 package in 0.33ms
+Installed 1 package in 0.72ms
+ - flash-kda==0.0.1+baseline.r10 (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)
+ + flash-kda==0.0.1+r11a.compact (from file:///home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/team/c1_flashkda/FlashKDA)

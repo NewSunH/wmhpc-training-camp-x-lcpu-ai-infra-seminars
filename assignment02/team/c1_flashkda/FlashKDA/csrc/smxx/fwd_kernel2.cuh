@@ -40,6 +40,13 @@
 #define C1_K2_DIRECT_OUTPUT_VEC 0
 #endif
 
+// R11-A probe: when direct output is selected, omit the shared-memory output
+// ring from SharedStorageK2.  The default and the R10 direct path retain the
+// original storage layout unless this separate opt-in is enabled.
+#ifndef C1_K2_COMPACT_DIRECT_STORAGE
+#define C1_K2_COMPACT_DIRECT_STORAGE 0
+#endif
+
 template <int D, int CHUNK = 16>
 struct K2Layouts {
     static constexpr int kValueSliceD = D / 2;
@@ -175,12 +182,31 @@ struct SharedStorageK2 {
         alignas(128) cute::ArrayEngine<BF16, cute::cosize_v<ValueVOLayout>> out;
     };
 
+    // Direct output writes the completed fragment from the MMA warp straight
+    // to global memory, so it has no consumer for the output ring.  Keep a
+    // tiny aligned placeholder in the union so the member remains well-formed
+    // for all template instantiations; the real ring is still used by every
+    // default/non-direct build.  The following input/state members determine
+    // the union size in the compact variant.
+    struct EmptyOutputStorage {
+        alignas(128) cute::ArrayEngine<BF16, 1> out;
+
+        // Preserve the original source expression
+        // shared_storage.output[stage].out.begin() in the discarded direct
+        // output path without allocating an output ring.
+        __host__ __device__ EmptyOutputStorage& operator[](int) { return *this; }
+    };
+    using OutputStorageArray = std::conditional_t<
+        (C1_K2_COMPACT_DIRECT_STORAGE != 0 && C1_K2_DIRECT_OUTPUT != 0),
+        EmptyOutputStorage,
+        OutputStorage[OutputStages]>;
+
     // Anonymous union: pipeline buffers share space with fp32 state conversion buffer.
     // FP32 state load/store happens before/after the pipeline loop, so no overlap.
     union {
         struct {
             InputStorage input[InputStages];
-            OutputStorage output[OutputStages];
+            OutputStorageArray output;
         };
         alignas(128) char state_fp32_buf[cute::cosize_v<ValueStateSmemLayout> * sizeof(float)];
     };
