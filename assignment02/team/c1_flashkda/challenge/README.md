@@ -88,3 +88,43 @@ cluster barrier、TMA multicast 和新的 epilogue，和 FlashKDA 现有的
 `16x16` warp-local recurrence 不是 ABI 兼容的替换。由于 probe 的寄存器和
 epilogue 成本已经显著，当前证据不足以冒险接入完整 K2；默认环境继续保持
 `0.0.1+baseline.r4`。
+
+## 第六轮：alpha=1/beta=0 direct epilogue 优化
+
+第五轮 NCU 显示最小 2SM state2 为 181 registers/thread。state-update
+probe 的 host 参数固定为 `alpha=1, beta=0`，因此 C tile 和 AXPBY 在这个
+窄实验中是无效工作。`tcgen05_sm103_2sm_probe.cu` 新增了编译期开关
+`C1_TCGEN05_DIRECT_EPILOGUE`：只保留 TMEM→RMEM 和 RMEM→GMEM，跳过
+`tDrC`、C 的 global load 以及 `axpby`。默认编译和通用 epilogue 完全不变，
+该开关不能用于需要 beta 或非单位 alpha 的生产路径。
+
+B300 的编译方式为：
+
+```bash
+nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+  -DC1_TCGEN05_STATE2 -DC1_TCGEN05_QUIET \
+  -DC1_TCGEN05_DIRECT_EPILOGUE \
+  -I../FlashKDA/cutlass/include -I../FlashKDA/cutlass/tools/util/include \
+  -I../FlashKDA/cutlass/examples/common -I. \
+  -o tcgen05_sm103_2sm_state2_r6_direct tcgen05_sm103_2sm_probe_r6.cu
+```
+
+job 24262 在 `128x128x16` 上用 200 次 event、30 次 warm-up 得到：
+
+| variant | event (ms) | correctness | registers/thread |
+| --- | ---: | --- | ---: |
+| general AXPBY | 0.0212210 | exact | 181 |
+| direct alpha=1,beta=0 | 0.0204546 | exact | 106 |
+
+direct epilogue 将寄存器数减少 41.4%，event 时间减少 3.6%。NCU 的单次
+replay 时间为 15.584 us 对 14.592 us；该列只用来确认结构变化，正式结论
+使用 CUDA event。较大的 `512x1024x64` 工作量在 job 24265 的三次成对重复
+中，direct 相对 general 分别快 2.98%、1.99% 和 2.31%，但没有达到原先
+设定的 10% 微内核加速门槛。两种变体的 CPU reference 均为
+`Relative error = 0`。
+
+本轮只证明“去掉无效 AXPBY 临时量可以显著降低寄存器压力”，没有证明
+完整 K2 应采用这个 epilogue。K2 需要保留 recurrence 的 state 更新和
+实际的写回协议；下一步若继续，应先把这个 direct 变体用于更接近 K2 的
+state-only layout，再决定是否值得做完整集成。B300 默认 FlashKDA 仍保持
+`0.0.1+baseline.r4`。

@@ -67,3 +67,13 @@ git；报告中的结论同时记录了关键计数和指标。
   details。1SM state probe 为 255 registers/thread、8,320 B dynamic smem；
   官方 2SM 为 255/32,896 B；最小 2SM state2 降至 181/4,224 B。NCU 的
   `gpu__time_duration` 只用于结构观察，正式比较使用 CUDA events。
+- `tcgen05_direct_epilogue_run_24262.log`：第六轮 `128x128x16` 的 general
+  AXPBY 与 direct alpha=1,beta=0 epilogue 对照；两者均 exact，event 分别为
+  0.0212210 ms 和 0.0204546 ms。
+- `tcgen05_direct_epilogue_large_24264.log`、
+  `tcgen05_direct_epilogue_repeat_24265.log`：第六轮
+  `512x1024x64` 的一次大问题和三次成对重复；direct 变体相对 general
+  分别约快 0.8%（单次）以及 2.98%、1.99%、2.31%（重复）。
+- `tcgen05_direct_epilogue_{base,direct}_ncu_24263.csv`：第六轮 NCU
+  对照；direct epilogue 将 registers/thread 从 181 降至 106，dynamic
+  shared memory 保持 4,224 B。NCU replay 时间仅用于结构观察。

@@ -1,0 +1,18 @@
+REP_BASE
+bench_iters=300 bench_warmup=50 bench_total_ms=5.2464 bench_iter_ms=0.017488
+Relative error: 0.000000e+00
+REP_DIRECT
+bench_iters=300 bench_warmup=50 bench_total_ms=5.09005 bench_iter_ms=0.0169668
+Relative error: 0.000000e+00
+REP_BASE
+bench_iters=300 bench_warmup=50 bench_total_ms=5.17507 bench_iter_ms=0.0172502
+Relative error: 0.000000e+00
+REP_DIRECT
+bench_iters=300 bench_warmup=50 bench_total_ms=5.07184 bench_iter_ms=0.0169061
+Relative error: 0.000000e+00
+REP_BASE
+bench_iters=300 bench_warmup=50 bench_total_ms=5.20739 bench_iter_ms=0.017358
+Relative error: 0.000000e+00
+REP_DIRECT
+bench_iters=300 bench_warmup=50 bench_total_ms=5.08717 bench_iter_ms=0.0169572
+Relative error: 0.000000e+00

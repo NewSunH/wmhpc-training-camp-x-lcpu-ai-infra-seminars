@@ -1,0 +1,22 @@
+BASE
+bench_iters=200 bench_warmup=30 bench_total_ms=4.24419 bench_iter_ms=0.021221
+Matrix A: 128x16 of half_t
+Matrix B: 128x16 of half_t
+Matrix C: 128x128 of float
+Infinity norm of A: 1.200000e+01
+Infinity norm of B: 1.300000e+01
+Infinity norm of C: 2.650000e+02
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.
+DIRECT
+bench_iters=200 bench_warmup=30 bench_total_ms=4.09091 bench_iter_ms=0.0204546
+Matrix A: 128x16 of half_t
+Matrix B: 128x16 of half_t
+Matrix C: 128x128 of float
+Infinity norm of A: 1.200000e+01
+Infinity norm of B: 1.300000e+01
+Infinity norm of C: 2.650000e+02
+Infinity norm of (C - C_ref): 0.000000e+00
+Relative error: 0.000000e+00
+Execution is successful.

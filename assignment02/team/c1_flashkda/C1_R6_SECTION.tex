@@ -1,0 +1,179 @@
+\section{第六轮：direct epilogue 的低寄存器实验}
+
+\subsection{动机、假设和边界}
+
+第五轮的最小 2SM state2 probe 已经能够 exact 运行，但 NCU 报告
+181 registers/thread。该 probe 的 host 端调用固定为
+\code{alpha=1,beta=0}，而通用 epilogue 仍然创建了 C 的寄存器 fragment，
+执行了一次 C global load 和 AXPBY，再将结果写回 D。因此本轮只检验一个
+局部假设：如果把无效的 C/AXPBY 临时量完全移除，寄存器压力是否会下降，
+以及下降是否能转化为稳定的 event 加速。
+
+实验不改变 FlashKDA 默认 extension，也不宣称该路径支持任意 alpha/beta。
+\code{C1\_TCGEN05\_DIRECT\_EPILOGUE} 只在
+\code{C1\_TCGEN05\_STATE2} probe 上启用；通用 AXPBY 分支保留，作为
+同一 source、同一 atom、同一输入的对照。该取舍与 CUTLASS Blackwell 文档
+列出的 2SM epilogue 调度选项相容，但没有直接把 tutorial epilogue 接入
+生产 kernel；参见
+\url{https://github.com/NVIDIA/cutlass/blob/main/media/docs/cpp/blackwell_functionality.md}。
+
+\subsection{代码变更}
+
+在 \code{challenge/tcgen05\_sm103\_2sm\_probe.cu} 的 Step 3 中加入
+预处理分支：
+
+\begin{lstlisting}
+#if defined(C1_TCGEN05_DIRECT_EPILOGUE)
+  Tensor tDrAcc = make_tensor<AccType>(shape(tDgD));
+  copy(tiled_t2r_copy, tDtAcc, tDrAcc);  // TMEM -> RMEM
+  copy(tDrAcc, tDgD);                     // RMEM -> GMEM
+#else
+  Tensor tDrC = make_fragment_like(tDgC);
+  copy(tDgC, tDrC);
+  Tensor tDrAcc = make_tensor<AccType>(shape(tDgD));
+  copy(tiled_t2r_copy, tDtAcc, tDrAcc);
+  axpby(alpha, tDrAcc, beta, tDrC);
+  copy(tDrC, tDgD);
+#endif
+\end{lstlisting}
+
+direct 分支仍使用同一个 TMEM copy atom、同一个输出 partition 和同一个
+cluster launch；区别仅在于不生成 \code{tDrC}。这使得寄存器计数差异
+可以归因到 epilogue，而不是 tile、TMA 或 launch 配置。
+
+\subsection{B300 构建和运行命令}
+
+源码通过 \code{scp} 同步到 B300 的 challenge 目录，在 Slurm GPU allocation
+中以 CUDA 13 的 \code{sm\_103a} 编译。baseline 和 direct binary 使用
+同一个 source checkout：
+
+\begin{lstlisting}
+cd <B300_REPO>/assignment02/team/c1_flashkda/challenge
+nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+  -DC1_TCGEN05_STATE2 -DC1_TCGEN05_QUIET \
+  -I../FlashKDA/cutlass/include \
+  -I../FlashKDA/cutlass/tools/util/include \
+  -I../FlashKDA/cutlass/examples/common -I. \
+  -o tcgen05_sm103_2sm_state2_r6_base tcgen05_sm103_2sm_probe_r6.cu
+
+nvcc -std=c++17 -O3 -arch=sm_103a --expt-relaxed-constexpr \
+  -DC1_TCGEN05_STATE2 -DC1_TCGEN05_QUIET \
+  -DC1_TCGEN05_DIRECT_EPILOGUE \
+  -I../FlashKDA/cutlass/include \
+  -I../FlashKDA/cutlass/tools/util/include \
+  -I../FlashKDA/cutlass/examples/common -I. \
+  -o tcgen05_sm103_2sm_state2_r6_direct tcgen05_sm103_2sm_probe_r6.cu
+\end{lstlisting}
+
+job 24262 在两个 binary 上分别执行：
+
+\begin{lstlisting}
+export C1_TCGEN05_BENCH_ITERS=200 C1_TCGEN05_BENCH_WARMUP=30
+./tcgen05_sm103_2sm_state2_r6_base
+./tcgen05_sm103_2sm_state2_r6_direct
+\end{lstlisting}
+
+两次输出均为 \code{Relative error = 0} 和
+\code{Execution is successful}。由于 event 区间只包住已经构造好的
+kernel launch，host 端 CuTe layout print 不参与正式时间。
+
+\subsection{结果一：最小 state2 形状}
+
+job 24262 的 \(128\times128\times16\) 对照如下：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r l}
+\toprule
+variant & event (ms) & registers/thread & correctness \\
+\midrule
+general AXPBY & 0.0212210 & 181 & exact \\
+direct alpha=1,beta=0 & 0.0204546 & 106 & exact \\
+\bottomrule
+\end{tabular}
+\caption{job 24262，200 event iterations、30 次 warm-up。}
+\end{table}
+
+direct epilogue 将寄存器数从 181 降到 106，减少
+\((181-106)/181=41.4\%\)；CUDA event 从 0.0212210 ms 降到
+0.0204546 ms，减少 3.6\%。NCU 单次 replay 的对应时间为 15.584 us
+和 14.592 us；该时间受 replay 影响，只用于确认结构变化。
+
+\subsection{结果二：较大 tiled workload}
+
+为了确认收益不是单 tile 噪声，job 24264 使用
+\(512\times1024\times64\)（32 个 \(128\times128\times16\) work items）
+做一次对照，得到 general 0.0233005 ms、direct 0.0231078 ms；direct
+快约 0.8\%。随后 job 24265 在同一 allocation 配置下进行三次成对重复，
+每次 300 event iterations、50 次 warm-up：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{c r r r}
+\toprule
+repeat & general (ms) & direct (ms) & direct speedup \\
+\midrule
+1 & 0.0174880 & 0.0169668 & 2.98\% \\
+2 & 0.0172502 & 0.0169061 & 1.99\% \\
+3 & 0.0173580 & 0.0169572 & 2.31\% \\
+\bottomrule
+\end{tabular}
+\caption{job 24265 的三次成对 CUDA-event 重复；两种 variant 的
+CPU reference 均 exact。}
+\end{table}
+
+重复结果显示 direct 路径有小幅且方向一致的优势，但没有达到本轮预设的
+10\% 微内核加速门槛。该门槛用于决定是否值得把路径继续迁移到 K2，
+不是作业题目要求的硬性阈值。
+
+\subsection{NCU 资源变化}
+
+job 24263 使用和第五轮相同的 lightweight metric 集合：
+\code{launch\_\_block\_\_size}、\code{launch\_\_grid\_\_size}、
+\code{launch\_\_registers\_\_per\_\_thread}、
+\code{launch\_\_shared\_\_mem\_\_per\_\_block\_\_dynamic}、active warps、
+DRAM bytes 和 \code{gpu\_\_time\_\_duration}。两者 launch 均为 block
+128、grid (2,1,1)、dynamic shared memory 4,224 B、active warps
+约 6.15\%。变化集中在寄存器和 global read：
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{l r r r}
+\toprule
+variant & registers/thread & DRAM read (B) & NCU time (us) \\
+\midrule
+general AXPBY & 181 & 118,528 & 15.584 \\
+direct alpha=1,beta=0 & 106 & 49,664 & 14.592 \\
+\bottomrule
+\end{tabular}
+\caption{job 24263 的 NCU CSV；DRAM write 计数在该轻量 replay 中为零，
+不能解释为没有 global store。}
+\end{table}
+
+direct 路径减少了 C tile 的读取，因此 DRAM read 也明显下降；但对更大
+问题，固定的 TMEM allocation、2SM barrier、TMA multicast 和 output store
+仍占据主要时间。Blackwell tuning guide 将寄存器文件、shared memory 和
+cluster occupancy 都列为需要同时检查的资源，参见
+\url{https://docs.nvidia.com/cuda/blackwell-tuning-guide/}。
+
+\begin{record}{R6 结论与接入决策}
+本轮实现了一个可回滚的 opt-in direct epilogue，并在 B300 上证明：
+\begin{enumerate}
+\item alpha=1,beta=0 state2 probe 保持 exact；
+\item registers/thread 从 181 降到 106，证明通用 AXPBY 临时量确实是
+      当前微内核寄存器压力的重要来源；
+\item 最小 tile event 快 3.6\%，较大 workload 的三次重复快
+      1.99--2.98\%，但没有达到 10\% 的迁移门槛；
+\item 该优化不能直接用于完整 K2，因为 K2 的 state update、alpha/beta
+      语义和输出布局尚未与这个 GEMM probe 对齐。
+\end{enumerate}
+
+因此第六轮不把 direct 分支接入 \FlashKDA 默认路径，也不把它宣称为端到端
+baseline 超越。下一轮若继续，优先顺序应为：先构造保留 K2 state 语义的
+state-only 写回 probe；只有在该 probe 同时保持 exact 且出现稳定的双位数
+收益时，才值得进行一次窄范围 K2 集成。否则应保留 baseline，并将本轮的
+41.4\% register reduction 作为 SM100 v2 的资源设计证据。
+\end{record}

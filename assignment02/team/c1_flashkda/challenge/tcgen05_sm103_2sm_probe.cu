@@ -406,6 +406,15 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   Tensor tDtAcc = thr_t2r_copy.partition_S(tCtAcc);               // (CpyS, NumCpy_M, NumCpy_N)
   Tensor tDgD   = thr_t2r_copy.partition_D(tCgD);                 // (CpyD, NumCpy_M, NumCpy_N)
   using AccType = typename decltype(tCtAcc)::value_type;
+#if defined(C1_TCGEN05_DIRECT_EPILOGUE)
+  // The state-update probe uses alpha=1 and beta=0.  In this opt-in mode the
+  // C source tile is not materialized at all: load the TMEM accumulator and
+  // store it directly to D.  This is deliberately a narrow benchmark path,
+  // not a replacement for the general AXPBY epilogue.
+  Tensor tDrAcc = make_tensor<AccType>(shape(tDgD));              // (CpyD, NumCpy_M, NumCpy_N)
+  copy(tiled_t2r_copy, tDtAcc, tDrAcc);                          // TMEM -> RMEM
+  copy(tDrAcc, tDgD);                                             // RMEM -> GMEM
+#else
   Tensor tDrAcc = make_tensor<AccType>(shape(tDgD));              // (CpyD, NumCpy_M, NumCpy_N)
   // Load TMEM -> RMEM
   copy(tiled_t2r_copy, tDtAcc, tDrAcc);
@@ -414,6 +423,7 @@ gemm_device(ATensor mA,                      // (Gemm_M, Gemm_K)
   axpby(alpha, tDrAcc, beta, tDrC);
   // Store RMEM -> GMEM
   copy(tDrC, tDgD);
+#endif
 
   __syncthreads();
 
