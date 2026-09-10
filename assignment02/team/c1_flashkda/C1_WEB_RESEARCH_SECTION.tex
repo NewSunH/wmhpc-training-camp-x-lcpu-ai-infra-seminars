@@ -77,6 +77,17 @@ SM103 调优记录}从 SM80 MMA 迁移到 TMA+TCGen05，并明确记录了 TMA/T
 
 \subsection{本地 baseline 的实际调优结构}
 
+官方
+\href{https://github.com/MoonshotAI/FlashKDA/blob/master/docs/20260420-flashkda-v1-deep-dive.md}{FlashKDA
+v1 deep dive} 对这些选择给出了与本地源码一致的因果解释：CHUNK=16 同时
+满足 bf16 门控范围、\(16\times16\) 逆矩阵成本和 SM80 MMA 形状；K1/K2
+按 token-parallel 与 head-parallel 的自然轴拆分，早期单 kernel 方案因
+recurrence 并行度低而让 SM 空转，拆分后至少获得 15\% 的端到端改善；state
+采用 bf16 以减小 shared footprint，gate 使用 \code{tanh.approx.f32}，指数
+使用 \code{ex2.approx.ftz.f32}，K2 再用 \code{MOVM\_T} 做寄存器文件内转置。
+因此当前 base 并不是“只使用默认 CUDA kernel”，而是一套围绕数值、shared
+memory 生命周期和 SM80 MMA 形状共同调过的 v1。
+
 对当前 checkout 的 \code{FlashKDA/csrc/smxx/fwd\_launch.cu}、
 \code{fwd\_kernel1.cuh}、\code{fwd\_kernel2.cuh} 和 \code{setup.py} 做源码
 审计后，baseline 的关键选择如下：
