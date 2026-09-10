@@ -1,0 +1,134 @@
+\section{R9 执行记录：output fragment 的 CuTe 坐标映射诊断}
+
+\subsection{R9 目标}
+
+R8 的 direct global-store 探针已经在真实 FlashKDA 输入上产生大量错误，但
+仅凭最终数值差分，无法区分 MMA fragment 的线程映射、shared-memory swizzle
+和 global tile layout 各自的责任。R9 将问题缩小为一个不涉及 recurrence、
+TMA 或 BF16 算术的最小实验：两个 MMA warp 各写两个 \(16\times16\) block，
+每个寄存器 fragment 元素填入唯一的 BF16 原始 bit pattern；现有
+\code{SM90\_U32x4\_STSM\_N} shared-store 路径作为 oracle，再把同一 source
+map 应用于 row-major global tile，逐元素比较两者。
+
+本轮验证完整 \(16\times64\) tile 以及一个 7 行 partial tail。因为完整 tile
+已经能暴露 layout 错误，tail 只在显式 map 上检查边界谓词。
+
+\subsection{诊断 kernel 与标记设计}
+
+新增 \code{challenge/r9\_output\_map\_probe.cu}，复用了 K2 的
+\code{K2Layouts<128,16>::ValueSliceVOLayout}、
+\code{make\_tiled\_mma} 和
+\code{make\_tiled\_copy\_C(Copy\_Atom<SM90\_U32x4\_STSM\_N>)}。对 warp、
+block、lane 和 fragment index 组合成不同的 16-bit code：
+
+\[
+  \mathrm{code}=1+2048\,\mathrm{warp}+1024\,\mathrm{block}
+    +32\,\mathrm{lane}+\mathrm{fragment\_index}.
+\]
+
+标记通过 \code{BF16::bitcast} 写入，不经过浮点加法或转换。kernel 同时
+生成三份结果：
+
+\begin{enumerate}
+  \item 将 fragment 用既有 STSM copy 写入 K\_INTER shared tile，再按逻辑
+        \([16,64]\) 坐标读出，作为 shared-store oracle；
+  \item 将同一个 \code{retile\_S}/\code{partition\_D} source map 套到
+        row-major global tile，作为待检验的 direct map。
+  \item 按 oracle 反推出显式 lane/fragment-index 公式写入 row-major tile，
+        并用 \code{row<7} 谓词生成 partial-tail 结果。
+\end{enumerate}
+
+这样比较的是 bit pattern 的位置，不是数值精度。源码保留了 row 0 的完整
+十六进制结果，便于后续 R10 的 compact map 对照。
+
+\subsection{B300 构建与运行}
+
+远端实验副本位于 B300 的 GPU 节点；首次构建忘记了
+\code{--expt-extended-lambda}，job 24501 只产生 nvcc 诊断：
+\code{utils.cuh} 和 \code{fwd\_kernel2.cuh} 中的 device lambda 被拒绝。
+修正后的命令如下：
+
+\begin{lstlisting}
+cd assignment02/team/c1_flashkda/challenge
+nvcc -std=c++17 -O3 -arch=sm_103a \
+  --expt-relaxed-constexpr --expt-extended-lambda \
+  -I../FlashKDA/cutlass/include \
+  -I../FlashKDA/cutlass/tools/util/include \
+  -I../FlashKDA/cutlass/examples/common \
+  -I../FlashKDA/csrc -I. \
+  -o r9_output_map_probe r9_output_map_probe.cu
+./r9_output_map_probe
+\end{lstlisting}
+
+job 24516 编译和运行成功，日志为
+\code{results/r9\_map\_build\_run\_24516.log}；随后 job 24520/24523/24524
+分别补齐完整 oracle map、显式逆映射和 tail predicate。早期选项错误也保留在
+\code{results/r9\_map\_build\_run\_24501.log}。完整源码和日志已纳入 git。
+
+\subsection{结果：朴素 row-major map 失败，显式 map exact}
+
+输出为：
+
+\begin{lstlisting}
+R9 shared-oracle/direct-map comparison: mismatches=1008 unwritten=0 total=1024
+R9 explicit-inverse-map comparison: mismatches=0 unwritten=0 total=1024
+R9 explicit-map tail rows=7: mismatches=0 outside_writes=0
+\end{lstlisting}
+
+即只有 16 个位置与 oracle 相同，且没有 global tile 空洞。oracle 和 direct
+的 row 0 开头分别为：
+
+\begin{lstlisting}
+oracle: 0001 0002 0021 0022 0041 0042 0061 0062
+        0005 0006 0025 0026 0045 0046 0065 0066
+direct: 0001 0002 0003 0004 0005 0006 0007 0008
+        0201 0202 0203 0204 0205 0206 0207 0208
+\end{lstlisting}
+
+direct map 把一个 lane 的连续 fragment 元素排在一起，再移动到下一个
+lane；oracle 则显示 STSM/K\_INTER layout 对 lane 和 fragment index 做了
+交错。例如 oracle 的第三、四列来自 lane 1 的前两个元素，而 direct 的
+第三、四列仍来自 lane 0。这与 R8 direct7 在真实 output 上的
+190,924 个错误元素一致，但 R9 把原因隔离到了 copy-map 层。
+
+因此不能把 shared pointer 改成 global pointer，也不能仅把 global tile 声明
+成 row-major 后复用 \code{partition\_D}。本轮从 oracle 得到的显式公式为：
+
+\begin{lstlisting}
+row       = (lane / 4) + (((fragment_index / 2) & 1) * 8)
+local_col = ((fragment_index / 4) * 8) + ((lane & 3) * 2) + (fragment_index & 1)
+col       = (warp * 2 + block) * 16 + local_col
+\end{lstlisting}
+
+该公式在完整 tile 上逐 bit exact，并在 \code{row<7} 的 tail predicate 下
+保持 0 个有效区域错误、0 个越界写入。它目前仍是诊断 kernel 中的表/公式，
+尚未接回 FlashKDA；R10 需要确认 fragment size、ValueSplit 之外的 default
+layout，以及真实 K2 的寄存器/写回协议。
+
+\subsection{R9 判定与 R10 入口}
+
+R9 成功完成了诊断目标，产生了一个可作为 R10 输入的显式映射，但尚未接入
+生产 kernel：
+
+\begin{itemize}
+  \item shared-store oracle 可以稳定产生唯一标记的完整 tile；
+  \item 朴素 row-major direct map 在 1024 个位置中错 1008 个；
+  \item 显式公式在 1024 个位置上 exact，并在 7 行 partial tail 上无越界；
+  \item 朴素 map 的失败发生在没有真实数据、没有 TMA 的最小 kernel 中，
+        所以不是 recurrence 数值误差或 pipeline race；
+  \item 当前源码只保留诊断 kernel，没有重新引入错误的 direct output 开关。
+\end{itemize}
+
+R10 应把显式公式改成低寄存器、无分支（或仅 tail 分支）的实际写回，验证
+两个 warp 的四个 block 以及更多 partial-tail case；只有它在真实 K2 的
+bit pattern/output/state 层面 exact，才把它接回
+FlashKDA，并测量是否能把 split full 的约 2.035 ms 降到 default baseline
+约 1.761 ms 以下。若正确 map 的指令和寄存器成本无法达到至少 5\% 改善，
+则停止 direct-store 路线，转而评估 launch、TMA descriptor 和 CTA 固定开销。
+
+\begin{record}{R9 结论}
+R9 没有产生速度优化，但已从 K\_INTER/SM90 STSM oracle 中推导出可执行的
+显式 lane/fragment→row/column 映射，并在完整 tile 与 7 行 tail 上逐 bit
+exact。R8 direct 失败的根因已定位；R10 可以在这个映射基础上做真实 K2
+写回原型，但在 output/state exactness 通过前不接入默认路径。
+\end{record}

@@ -1,0 +1,41 @@
+../FlashKDA/csrc/smxx/utils.cuh(162): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+      auto sC_store_op = [] __attribute__((device)) (float x) { return BF16(x); };
+                                                    ^
+
+../FlashKDA/csrc/smxx/utils.cuh(184): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+      auto sC_store_op = [] __attribute__((device)) (float x) { return FP16(x); };
+                                                    ^
+
+../FlashKDA/csrc/smxx/utils.cuh(305): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+      cute::transform(tCrC, tCrC_bf16, [] __attribute__((device)) (FP16 x) -> BF16 { return BF16(x); });
+                                                                  ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(734): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                      cute::transform(out_acc[i], out_bf16[i], [] __attribute__((device)) (float x) { return BF16(x); });
+                                                                                          ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(756): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                  cute::transform(u_acc[i], u_bf16[i], [] __attribute__((device)) (float x) { return BF16(x); });
+                                                                                  ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(783): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                  cute::transform(u_acc[i], u_bf16[i], [] __attribute__((device)) (float x) { return BF16(x); });
+                                                                                  ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(810): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                      cute::transform(out_acc[i], out_bf16[i], [] __attribute__((device)) (float x) { return BF16(x); });
+                                                                                          ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(817): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                              [] __attribute__((device)) (BF16 c, float a) { return c + BF16(a); });
+                                                         ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(820): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                          cute::transform(out_acc[i], gemm_bf16, [] __attribute__((device)) (float x) { return BF16(x); });
+                                                                                            ^
+
+../FlashKDA/csrc/smxx/fwd_kernel2.cuh(821): error: __host__ or __device__ annotation on lambda requires --extended-lambda nvcc flag
+                          cute::transform(out_bf16[i], gemm_bf16, out_bf16[i], [] __attribute__((device)) (BF16 c, BF16 a) { return c + a; });
+                                                                                                          ^
+
+10 errors detected in the compilation of "r9_output_map_probe.cu".

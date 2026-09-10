@@ -152,3 +152,23 @@ R8 的完整命令、编译开关、exactness 判据、失败尝试及 R9 计划
 `C1_R8_EXECUTION_SECTION.tex`。`r7_state_only_probe.py` 同时扩展了
 `output_equal_reference`、digest、差分元素数和绝对误差字段，便于后续完整
 output 优化的自动筛选。
+
+## R9：CuTe output fragment 映射诊断
+
+- `../challenge/r9_output_map_probe.cu`：最小 2-warp、4 个 `16×16` block
+  诊断。每个 fragment 元素使用唯一 BF16 原始 bit pattern；现有
+  `SM90_U32x4_STSM_N` shared-store 作为 oracle，再测试同一
+  `retile_S/partition_D` map 到 row-major global tile。
+- `r9_map_build_run_24501.log`：首次构建漏掉 `--expt-extended-lambda`，保留
+  nvcc 的 device-lambda 失败信息。
+- `r9_map_build_run_24516.log`：加入 extended-lambda 后在 B300/SM103a 编译
+  运行成功；完整 tile 1024 个位置中 direct map 错 1008 个、无空洞。随后
+  `r9_map_build_run_24520.log`、`r9_map_build_run_24523.log`、
+  `r9_map_build_run_24524.log` 逐步补齐完整 oracle map、显式逆映射和
+  7 行 tail predicate；最终 direct map 仍错 1008/1024，而显式公式为
+  0/1024 mismatch，tail 为 0 个错误、0 个越界写入。
+
+R9 证明 R8 direct 失败来自 K_INTER/SM90 STSM swizzle 与 row-major global
+layout 不同构，而不是 recurrence 数值误差或 pipeline race；同时得到一个
+可执行的显式 lane/fragment→row/column 公式。R10 需要把公式改造成低寄存器
+实际写回，再用真实 K2 的 output/state exactness 和 CUDA events 评估收益。

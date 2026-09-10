@@ -1,0 +1,113 @@
+../FlashKDA/cutlass/include/cute/stride.hpp(108): error: static assertion failed with "Mismatched Ranks"
+        static_assert(tuple_size<Coord>::value == tuple_size< Shape>::value, "Mismatched Ranks");
+        ^
+          detected during:
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+../FlashKDA/cutlass/include/cute/stride.hpp(109): error: static assertion failed with "Mismatched Ranks"
+        static_assert(tuple_size<Coord>::value == tuple_size<Stride>::value, "Mismatched Ranks");
+        ^
+          detected during:
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+../FlashKDA/cutlass/include/cute/stride.hpp(73): error: cannot deduce the return type of function "cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<int, int>, Shape=cute::_16, Stride=cute::_8]" (declared at line 102); it has not been defined
+    return (... + crd2idx(get<Is>(coord), get<Is>(shape), get<Is>(stride)));
+                  ^
+          detected during:
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+../FlashKDA/cutlass/include/cute/stride.hpp(73): error: cannot deduce the return type of function "cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::C<0>, Shape=cute::tuple<cute::_8, cute::_2>, Stride=cute::tuple<cute::_1, cute::_128>]" (declared at line 102); it has not been defined
+    return (... + crd2idx(get<Is>(coord), get<Is>(shape), get<Is>(stride)));
+                  ^
+          detected during:
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+../FlashKDA/cutlass/include/cute/container/tuple.hpp(229): error: static assertion failed with "Index out of range"
+    static_assert(I < sizeof...(T), "Index out of range");
+    ^
+          detected during:
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+/usr/include/c++/13/tuple(1780): error: static assertion failed with "tuple index must be in range"
+        static_assert(__i < sizeof...(_Types), "tuple index must be in range");
+        ^
+          detected during:
+            instantiation of class "std::tuple_element<__i, std::tuple<_Types...>> [with __i=2UL, _Types=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 695 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of class "std::tuple_element<I, cute::tuple<T...>> [with I=2UL, T=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 230 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+/usr/include/c++/13/tuple(1782): error: class "std::_Nth_type<2UL, cute::_16, cute::tuple<cute::_8, cute::_2>>" has no member "type"
+        using type = typename _Nth_type<__i, _Types...>::type;
+                                                         ^
+          detected during:
+            instantiation of class "std::tuple_element<__i, std::tuple<_Types...>> [with __i=2UL, _Types=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 695 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of class "std::tuple_element<I, cute::tuple<T...>> [with I=2UL, T=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 230 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_16, cute::tuple<cute::_8, cute::_2>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+../FlashKDA/cutlass/include/cute/container/tuple.hpp(229): error: static assertion failed with "Index out of range"
+    static_assert(I < sizeof...(T), "Index out of range");
+    ^
+          detected during:
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+/usr/include/c++/13/tuple(1780): error: static assertion failed with "tuple index must be in range"
+        static_assert(__i < sizeof...(_Types), "tuple index must be in range");
+        ^
+          detected during:
+            instantiation of class "std::tuple_element<__i, std::tuple<_Types...>> [with __i=2UL, _Types=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 695 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of class "std::tuple_element<I, cute::tuple<T...>> [with I=2UL, T=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 230 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+/usr/include/c++/13/tuple(1782): error: class "std::_Nth_type<2UL, cute::_8, cute::tuple<cute::_1, cute::_128>>" has no member "type"
+        using type = typename _Nth_type<__i, _Types...>::type;
+                                                         ^
+          detected during:
+            instantiation of class "std::tuple_element<__i, std::tuple<_Types...>> [with __i=2UL, _Types=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 695 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of class "std::tuple_element<I, cute::tuple<T...>> [with I=2UL, T=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 230 of ../FlashKDA/cutlass/include/cute/container/tuple.hpp
+            instantiation of "decltype(auto) cute::get<I,T...>(const cute::tuple<T...> &) noexcept [with I=2UL, T=<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 73 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::detail::crd2idx_ttt(const Coord &, const Shape &, const Stride &, cute::seq<Is...>) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Is=<0, 1, 2>]" at line 110 of ../FlashKDA/cutlass/include/cute/stride.hpp
+            instantiation of "auto cute::crd2idx(const Coord &, const Shape &, const Stride &) [with Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>, Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>]" at line 171 of ../FlashKDA/cutlass/include/cute/layout.hpp
+            instantiation of "auto cute::Layout<Shape, Stride>::operator()(const Coord &) const [with Shape=cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, Stride=cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 241 of ../FlashKDA/cutlass/include/cute/tensor_impl.hpp
+            instantiation of "decltype(auto) cute::Tensor<Engine, Layout>::operator()(const Coord &) [with Engine=cute::ViewEngine<cute::smem_ptr<BF16 *>>, Layout=cute::Layout<cute::tuple<cute::_16, cute::tuple<cute::_8, cute::_2>>, cute::tuple<cute::_8, cute::tuple<cute::_1, cute::_128>>>, Coord=cute::tuple<cute::tuple<int, int>, cute::C<0>, int>]" at line 87 of r9_output_map_probe.cu
+            instantiation of "void r9_map_probe<OutputLayoutT>(BF16 *, BF16 *, uint16_t *) [with OutputLayoutT=OutputLayout]" at line 130 of r9_output_map_probe.cu
+
+10 errors detected in the compilation of "r9_output_map_probe.cu".
