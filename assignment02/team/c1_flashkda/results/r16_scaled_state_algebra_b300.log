@@ -1,0 +1,19 @@
+srun: job 24963 queued and waiting for resources
+srun: job 24963 has been allocated resources
+{
+  "algebra": {
+    "D": 128,
+    "chunk": 32,
+    "chunks_tested": 2,
+    "device": "cuda",
+    "float64_allclose": true,
+    "float64_output_max_abs_diff": 3.3306690738754696e-16,
+    "float64_output_max_rel_diff": 3.399155229355494e-12,
+    "float64_state_max_abs_diff": 1.6653345369377348e-16,
+    "float64_state_max_rel_diff": 3.881256067936878e-13,
+    "seed": 0,
+    "shift_max": -46.831339116141784,
+    "shift_min": -73.20644897693045,
+    "single_and_cross_chunk": true
+  }
+}

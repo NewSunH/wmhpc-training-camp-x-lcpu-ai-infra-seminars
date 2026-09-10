@@ -1,0 +1,185 @@
+\section{R16 执行记录：CHUNK=32 scaled-state reference 与 B300 microbenchmark}
+
+\subsection{本轮目标}
+
+R13 的 range probe 只验证了 common exponent shift 能否把 CHUNK=32 的
+BF16 factor 放回有限范围；它没有验证 K2 state projection 的语义。R16
+因此实现一个独立的 float64 reference，不改动 \FlashKDA{} extension：每个
+CHUNK=32 tile 的每个 key channel 选取一个 \(c_d\)，将 K1 factor 改写为
+\[
+ q'_d=q2^{s-c_d},\quad k'_d=k2^{s-c_d},\quad
+ k'_i=k2^{-s+c_d}.
+\]
+在 K2 的 state 投影中，将 state 的 key column 乘以 \(2^{c_d}\)：
+\[
+ S'_{v,d}=S_{v,d}2^{c_d}.
+\]
+于是
+\[
+ k'_d(S')^\mathsf{T}=k_dS^\mathsf{T},\qquad
+ q'_d(S')^\mathsf{T}=q_dS^\mathsf{T},
+\]
+而 \(q'_d(k'_i)^\mathsf{T}\)、\(k'_d(k'_i)^\mathsf{T}\) 中的 shift
+在 key-channel 维度逐项抵消。\(k_r\) 和 state decay 仍使用未缩放的代数值。
+
+本轮分为两个层次：
+
+\begin{enumerate}
+  \item 用 \(D=128\) 的 float64 reference 连续执行两个 CHUNK=32，覆盖
+        单 chunk 内部计算和跨 chunk state continuation；
+  \item 在 B300 上测量目标 \(H=96,T=8192,D=128\) 的全量 factor/state
+        缩放内存流量，以及一个保留 state reuse 的代表性 projection。
+        该 microbenchmark 不包含 K1/K2 launch、TMA、Neumann inverse、
+        output epilogue，不能作为端到端性能结论。
+\end{enumerate}
+
+\subsection{实现和命令}
+
+新增 \code{challenge/chunk32\_scaled\_state\_probe.py}。reference 使用
+float64 的 \(2^s\)、三角矩阵逆和 recurrence；scaled 与 raw 两次计算共用
+相同输入，并比较每个 chunk 的 output 以及第二个 chunk 完成后的 final
+state。microbenchmark 预先形成两套 BF16 operand，避免把 CUDA allocator
+开销混入 projection 对照；全目标的 elementwise case 则测量运行时创建
+\(q'_d,k'_d,S'\) 的额外读写。
+
+本地语法检查：
+
+\begin{lstlisting}
+python -m py_compile \\
+  assignment02/team/c1_flashkda/challenge/chunk32_scaled_state_probe.py
+\end{lstlisting}
+
+先在 B300 同步脚本，再分别运行 reference 和 microbenchmark：
+
+\begin{lstlisting}
+scp challenge/chunk32_scaled_state_probe.py infrab300:<B300_REPO>/assignment02/team/c1_flashkda/challenge/
+
+ssh infrab300 'set -o pipefail;
+  C1_ROOT=<B300_REPO>/assignment02/team/c1_flashkda;
+  C1_PY=<B300_REPO>/assignment02/.venv/bin/python;
+  cd "$C1_ROOT/FlashKDA";
+  srun --partition=gpu --gres=gpu:1 --cpus-per-task=8 --time=00:10:00
+    --chdir="$PWD" env PATH=<B300_REPO>/assignment02/.venv/bin:$PATH
+    "$C1_PY" -u ../challenge/chunk32_scaled_state_probe.py --seed 0
+    --json ../results/r16_scaled_state_algebra_b300.json
+    2>&1 | tee ../results/r16_scaled_state_algebra_b300.log'
+
+ssh infrab300 'set -o pipefail;
+  C1_ROOT=<B300_REPO>/assignment02/team/c1_flashkda;
+  C1_PY=<B300_REPO>/assignment02/.venv/bin/python;
+  cd "$C1_ROOT/FlashKDA";
+  srun --partition=gpu --gres=gpu:1 --cpus-per-task=8 --time=00:15:00
+    --chdir="$PWD" env PATH=<B300_REPO>/assignment02/.venv/bin:$PATH
+    "$C1_PY" -u ../challenge/chunk32_scaled_state_probe.py --seed 0
+    --benchmark --warmup 1 --iters 5
+    --json ../results/r16_scaled_state_bench_b300.json
+    2>&1 | tee ../results/r16_scaled_state_bench_b300.log'
+\end{lstlisting}
+
+reference job 为 24963，microbenchmark job 为 24964。脚本和四个轻量结果
+文件随后提交到仓库；R16 没有改动默认 CHUNK=16 的生产代码，也没有使用
+R14 workspace-fusion 的 opt-in binary。
+
+\subsection{单 chunk 与跨 chunk reference exactness}
+
+job 24963 的输入为 seed 0、\(D=128\)、两个连续 CHUNK=32，gate 仍为
+\code{lower\_bound=-5} 分布。每个 chunk 独立计算 \(c_d\)，第一 chunk
+的 final state 作为第二 chunk 的 initial state。raw reference 和 scaled
+reference 都在 float64 中执行，结果如下：
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r@{}}
+\toprule
+项目 & scaled 与 raw 的差异 \\
+\midrule
+output max absolute diff & \(3.33\times10^{-16}\) \\
+output max relative diff & \(3.40\times10^{-12}\) \\
+final state max absolute diff & \(1.67\times10^{-16}\) \\
+final state max relative diff & \(3.88\times10^{-13}\) \\
+\code{torch.allclose}（\(10^{-11}\)） & true \\
+shift range & \([-73.21,-46.83]\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+这证明“factor shift + state key-column inverse shift”在实数代数层面可以
+保持单 chunk 和跨 chunk 的 recurrence 语义。它不等价于生产 kernel 的
+bitwise exactness：生产路径的 factor 是 BF16，K1 的 \(L\) 和 K2 的多个
+GEMM 使用 SM80 MMA/FP16 accumulator；这些舍入顺序尚未在本轮实现。
+
+\subsection{B300 microbenchmark}
+
+job 24964 使用目标 \(H=96,T=8192,D=128,C=32\)，即每个 head 256 个
+tile、总计 24,576 个 head-tile。固定 shift \(c=-64\) 只用于形成一个
+可表示且便于复现的 operand 对照。结果为：
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r@{}}
+\toprule
+case & median (ms) & mean (ms) \\
+\midrule
+full target：ready operands / no-op & 0.0041 & 0.0055 \\
+full target：运行时形成 scaled operands & 0.7853 & 0.7853 \\
+representative projection：raw & 0.0247 & 0.0548 \\
+representative projection：scaled-state & 0.0228 & 0.0225 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+full-target 的第一行只是已准备好 operand 的事件基线，不是等价的
+elementwise identity kernel；它用于表明额外缩放本身约需 \(0.785\) ms 的
+大块读写。representative projection 为 \(768\times32\times128\) 乘以
+\(768\) 个 \(128\times128\) state，state 按 head 广播复用；raw case 的
+mean 被一个 \(0.175\) ms outlier 拉高，因而 median 更能反映这五次小样本
+对照。scaled projection 只比较已经准备好的 operand，不能抵消运行时
+factor/state scaling 的成本。
+
+这组数据不支持“rescale 几乎免费”的判断：即使 projection 本身没有明显
+额外延迟，目标形状上形成两个 scaled factor tile 和按 key column 变换
+state 的读写已经是一个接近当前完整 FlashKDA 延迟量级的独立操作。实际
+K1 若本来就要计算 exp2 和 factor，新增成本可能部分重叠，但必须通过完整
+TMA kernel 才能判断。
+
+\subsection{接入阻塞和后续边界}
+
+reference 结果使 scaled-state 设计从“代数猜想”推进为可检验的语义方案，
+但距离可运行 CHUNK=32 kernel 仍有以下工作：
+
+\begin{itemize}
+  \item K1/K2 workspace 的 \code{CHUNK}\(\times D\) 和
+        \code{CHUNK}\(\times\)\code{CHUNK} TMA descriptor、分配大小和
+        Neumann inverse 必须全部实例化为 32；
+  \item 每 tile/channel 的 \(c_d\) 需要存入 workspace 或在 K1/K2
+        同一 CTA 内传递；现有 \(g\_total[D]\) 只保存 state decay factor，
+        没有 shift metadata；
+  \item K2 的 state B operand 必须按 key column 应用 \(2^{c_d}\)，而
+        Phase 6 的 recurrence 仍要读未缩放 state；直接修改 shared state
+        会影响 state update 和 state in/out ABI；
+  \item BF16 factor 的有限性不保证 SM80 FP16 accumulator 的中间项有限。
+        需要以真实 MMA 做 lower/upper triangle、state projection、output
+        和 final-state 的 exactness；
+  \item 只有完成上述协议后，才有资格把固定 \(H=96,T=8192\) 的 CUDA event
+        与约 \(1.03\) ms 的同源码 baseline 比较。
+\end{itemize}
+
+\begin{decision}{R16 接入决策}
+本轮不强行把 CHUNK=32 写入生产 extension。float64 reference 已证明
+scaled-state 的数学补偿可覆盖单 chunk 和跨 chunk recurrence；B300
+microbenchmark 同时显示，运行时 operand scaling 的内存流量不可忽略，且
+当前实验没有覆盖 MMA rounding、TMA pipeline 和 workspace 生命周期。
+因此下一步只能沿“metadata + scaled-state operand + 真实 MMA exactness”
+逐项实现；在此之前不能声称 CHUNK=32 能改善端到端速度，也不能把本轮
+projection median 的微小差异解释为加速。
+\end{decision}
+
+\begin{record}{R16 结论}
+CHUNK=32 rescale 的关键缺口已从代数语义上补齐：在 float64 中按
+key-channel 缩放 state 后，两个连续 chunk 的 output/state 与未缩放
+reference 分别达到 \(3.40\times10^{-12}\) 和 \(3.88\times10^{-13}\) 的
+最大相对差异。真实 B300 microbenchmark 则给出约 \(0.785\) ms 的全目标
+scaled-operand 形成成本；这不是完整 kernel 时间，但足以说明额外缩放不能
+被忽略。默认生产 kernel 保持 CHUNK=16，R16 作为 CHUNK=32 v2 设计的
+reference 和性能上界证据。
+\end{record}

@@ -1,0 +1,81 @@
+{
+  "algebra": {
+    "D": 128,
+    "chunk": 32,
+    "chunks_tested": 2,
+    "device": "cuda",
+    "float64_allclose": true,
+    "float64_output_max_abs_diff": 3.3306690738754696e-16,
+    "float64_output_max_rel_diff": 3.399155229355494e-12,
+    "float64_state_max_abs_diff": 1.6653345369377348e-16,
+    "float64_state_max_rel_diff": 3.881256067936878e-13,
+    "seed": 0,
+    "shift_max": -46.831339116141784,
+    "shift_min": -73.20644897693045,
+    "single_and_cross_chunk": true
+  },
+  "benchmark": {
+    "fixed_shift_exp": -64.0,
+    "full_target_elementwise_baseline_ms": {
+      "mean_ms": 0.005542399920523166,
+      "median_ms": 0.004127999767661095,
+      "min_ms": 0.003936000168323517,
+      "samples_ms": [
+        0.003936000168323517,
+        0.004000000189989805,
+        0.004127999767661095,
+        0.0050559998489916325,
+        0.010591999627649784
+      ]
+    },
+    "full_target_elementwise_rescaled_ms": {
+      "mean_ms": 0.7852544069290162,
+      "median_ms": 0.7852799892425537,
+      "min_ms": 0.783456027507782,
+      "samples_ms": [
+        0.783456027507782,
+        0.7841280102729797,
+        0.7852799892425537,
+        0.7865279912948608,
+        0.7868800163269043
+      ]
+    },
+    "note": "microbenchmark only; not a complete FlashKDA K1/K2 benchmark",
+    "projection_baseline_ms": {
+      "mean_ms": 0.05479679852724075,
+      "median_ms": 0.02470399998128414,
+      "min_ms": 0.021183999255299568,
+      "samples_ms": [
+        0.021183999255299568,
+        0.022304000332951546,
+        0.02470399998128414,
+        0.03062400035560131,
+        0.1751679927110672
+      ]
+    },
+    "projection_rescaled_ms": {
+      "mean_ms": 0.022521600127220154,
+      "median_ms": 0.02284800074994564,
+      "min_ms": 0.020959999412298203,
+      "samples_ms": [
+        0.020959999412298203,
+        0.02147199958562851,
+        0.02284800074994564,
+        0.023104000836610794,
+        0.024224000051617622
+      ]
+    },
+    "representative_projection_shape": [
+      768,
+      32,
+      128,
+      128
+    ],
+    "target_shape": [
+      96,
+      8192,
+      128
+    ],
+    "target_tiles": 24576
+  }
+}
