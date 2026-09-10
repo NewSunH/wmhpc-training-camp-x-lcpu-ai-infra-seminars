@@ -1,0 +1,447 @@
+% C1 FlashKDA 小论文
+% 编译：latexmk -xelatex -interaction=nonstopmode C1_REPORT.tex
+% 本文是面向作业提交的研究报告；完整的逐命令实验底稿见
+% C1_EXPERIMENT_RECORD.tex。
+\documentclass[11pt,a4paper,fontset=none]{ctexart}
+
+\setCJKmainfont[BoldFont={Noto Serif CJK SC Bold}]{Noto Serif CJK SC}
+\setCJKsansfont[BoldFont={Noto Sans CJK SC Bold}]{Noto Sans CJK SC}
+\setCJKmonofont{Noto Sans CJK SC}
+\usepackage{geometry}
+\geometry{margin=2.3cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array,multirow,longtable,tabularx}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=2em}
+\usepackage{xcolor}
+\definecolor{accent}{RGB}{28,60,120}
+\definecolor{codebg}{RGB}{248,248,246}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\definecolor{strgreen}{RGB}{21,101,42}
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single, rulecolor=\color{gray!40}, framerule=0.4pt,
+  breaklines=true, columns=fullflexible, keepspaces=true,
+  showstringspaces=false, language=bash,
+  morekeywords={make,nvcc,uv,pytest,python,cd,ncu,nvdisasm,cuobjdump,srun,sbatch,ssh},
+  commentstyle=\color{gray!130}\itshape,
+  keywordstyle=\color{accent}\bfseries,
+  stringstyle=\color{strgreen},
+  xleftmargin=4pt, xrightmargin=4pt,
+}
+\usepackage{hyperref}
+\hypersetup{colorlinks, linkcolor=accent, urlcolor=accent}
+\Urlmuskip=0mu plus 1mu
+\emergencystretch=3em
+\pagestyle{plain}
+\setlength{\LTpre}{0.6em}
+\setlength{\LTpost}{0.6em}
+
+\newtcolorbox{record}[1]{enhanced,breakable,
+  colback=gray!5,colframe=gray!50,boxrule=0.5pt,arc=1.5pt,
+  left=7pt,right=7pt,top=5pt,bottom=5pt,
+  title={#1},fonttitle=\bfseries\sffamily\small,coltitle=black,
+  attach title to upper={\quad}}
+\newtcolorbox{decision}[1]{enhanced,breakable,
+  colback=accent!4,colframe=accent!70,boxrule=0.7pt,arc=1.5pt,
+  left=7pt,right=7pt,top=5pt,bottom=5pt,
+  title={#1},fonttitle=\bfseries\sffamily}
+\newcommand{\FlashKDA}{\textsc{FlashKDA}}
+\newcommand{\Fla}{\textsc{FLA}}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\begin{document}
+
+\begin{center}
+  {\LARGE\bfseries C1：FlashKDA 在 Blackwell 上为何停在 SM80 MMA}\\[6pt]
+  {\sffamily 从复现、微基准到 K2 结构挑战的实验报告}\\[4pt]
+  {\small 作业 2 Team / B300 主实验，RTX 5090 仅作跨架构诊断}
+\end{center}
+\vspace{0.5em}\hrule\vspace{1em}
+
+\begin{abstract}
+FlashKDA 在 B300 和 RTX 5090 上运行时，计算主路径仍然使用
+SM80 世代的 \code{mma.sync}/HMMA，而不是 WGMMA 或 SM100
+\code{tcgen05}。本报告以 B300 的 \(T=8192,H=96,D=128\) 为主要形状，
+复现官方正确性和性能，结合 SASS、Nsight Compute、CUDA-event benchmark、
+CuTe 微内核和多轮 exactness 对拍，回答题目要求的六个问题。结果表明：
+\(16\) 的 CHUNK 同时满足 bf16 数值范围、\(16\times16\) Neumann 求逆和
+SM80 MMA 形状；CHUNK=32/64 在当前下界下已经出现显著指数下溢。\code{tcgen05}
+的最小 M tile 为 64/128，与原有 16\(\times\)16 K2 recurrence 不能局部替换。
+K2 的主要限制不是简单的 DRAM 带宽不足，而是 chunk 间状态依赖、CTA 组织、
+barrier/TMA 固定开销和较低的可用并行度。多种 output、V-split、direct-store、
+swizzled-TMA 和共享存储重构均保持了若干 exactness，但没有稳定超过官方
+baseline；R12 的两个完整 output 候选与 baseline 持平，差距约 0.2\%。因此
+建议保留 SM80 通用路径，只有在准备同步重做 K2 分块、状态布局和同步协议时，
+才值得建立 SM100 专版。
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\section{问题定义与结论先行}
+
+题目要求回答的不是“能否在 B300 上编译”，而是为什么官方 kernel 在
+Blackwell 上仍保留 SM80 风格 MMA，以及是否存在足以改变这一决策的优化空间。
+本文将 ``baseline'' 定义为关闭所有 challenge 开关、同一源码和同一 B300
+节点上测得的官方非 split 路径。当前固定形状的 BF16 state baseline 约为
+\(1.03\,\mathrm{ms}\)；正式 benchmark 使用 CUDA event，warmup=30、
+iters=200、repeats=5，profiler 时间只用于结构解释。
+
+\begin{decision}{最终判断}
+\begin{enumerate}
+  \item 官方路径在 B300 上仍正确且高效，SASS 中为 HMMA；不能把“在
+  B300 上运行”误写成“已经使用 tcgen05”。
+  \item CHUNK=16 是算法、数值和指令形状的共同折中。只增大常量而不加入
+  rescale 会先破坏 bf16 的指数范围，而不是先得到理想吞吐。
+  \item 仅改变 MMA atom、减少 shared-memory 容量或改写 store 地址，均不足以
+  形成稳定的端到端收益；真正可能超过 10\% 的方向是 K1/K2 workspace fusion
+  或 CHUNK+rescale，但二者都属于结构性重写。
+  \item 对当前 v1，保留 SM80 通用实现是工程上更稳妥的选择。SM100 v2 只有在
+  有明确的 tile/layout/synchronization redesign 和目标 workload 时才值得投入。
+\end{enumerate}
+\end{decision}
+
+\section{实验环境与方法}
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lll}
+\toprule
+项目 & B300（主实验） & RTX 5090（诊断）\\
+\midrule
+GPU compute capability & 10.3 & 12.0\\
+CUDA / driver & 13.0 / 580.126.09 & 13.0 / 580.142\\
+PyTorch & 2.13.0+cu130 & 2.13.0+cu130\\
+Flash Linear Attention & 0.5.2 & 0.5.2\\
+FlashKDA snapshot & \multicolumn{2}{c}{commit \code{1ce47ea}}\\
+CUTLASS & \multicolumn{2}{c}{commit \code{5c149f52a436782210263fb2f19b354443a61c6a}}\\
+\bottomrule
+\end{tabular}
+\caption{实验软件和硬件。所有性能结论均注明设备和同源 control。}
+\end{table}
+
+B300 上官方 fixed/varlen 对拍均通过。官方形状的第一轮复现结果为
+\(1.0324\,\mathrm{ms}\)（fixed）、\(0.8591\,\mathrm{ms}\)（mixed varlen）和
+\(0.7003\,\mathrm{ms}\)（八段 varlen）；与 \Fla{} 的 \code{chunk\_kda}
+相比分别为约 2.30、2.78 和 3.35 倍。H=64 的附加形状显示 FlashKDA 并非对
+所有头数都领先，因此后续优化统一以题目指定的 H=96 为主，不用单一 shape 的
+结果外推到所有部署。
+
+性能测试遵循三条纪律：
+\begin{enumerate}
+  \item 正式时间使用 CUDA events，固定输入、seed、warmup/iters/repeats；
+  \item 每个实验分支都与同源码、同设备、同编译开关的 control 配对；
+  \item output 和 final state 均与 \code{fla\_kda\_ref} 对拍，错误分支只保留
+  诊断日志，不进入默认构建。
+\end{enumerate}
+
+\section{复现：计算主路径仍是 SM80 MMA}
+
+对 B300 和 5090 的 extension 执行 \code{cuobjdump --dump-sass}，得到：
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lrr}
+\toprule
+SASS pattern & B300/SM103 & RTX 5090/SM120\\
+\midrule
+\code{HMMA.16816.F16} & 24 & 24\\
+\code{HMMA.16816.F32.BF16} & 1520 & 1520\\
+\code{WGMMA} & 0 & 0\\
+\code{TCGEN05} & 0 & 0\\
+\bottomrule
+\end{tabular}
+\caption{两张卡的主 kernel 指令计数。}
+\end{table}
+
+B300 K2 recurrence 的代表性 NCU 结构为 block=192、grid-y=96、动态 shared
+memory 约 98.4 KiB、registers/thread 约 66--74，理论 occupancy 18.75\%，
+实际 achieved occupancy 约 9.37\%。tensor-pipe 活跃度约 20\%，memory
+throughput 约 38\%。这说明 kernel 不是一个可以用“把某条 MMA 换成更新指令”
+简单解释的高占用 GEMM；状态依赖和资源布局同样决定临界路径。
+
+\section{讨论点一：CHUNK=16 的三个约束}
+
+\subsection{数值范围}
+
+KDA 的门控累计量可以抽象写成
+\[
+  g_{\log_2}(t)=-5\log_2(e)\,\sigma(\exp(A_{\log})
+  (g(t)+\mathrm{dt\_bias})),\qquad
+  p_j=\exp_2\!\left(\sum_{t=0}^{j}g_{\log_2}(t)\right).
+\]
+在当前 lower bound=-5、bf16 workspace 和随机 probe（\(2^{20}\) 个独立
+scalar）下，累计指数的结果为：
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{rrrr}
+\toprule
+CHUNK & 最小累计 log2 & 最小 \(\exp_2\) & 写回 bf16 后为 0 的比例\\
+\midrule
+16 & -103.066 & \(9.419\times10^{-32}\) & 0\\
+32 & -189.270 & 0（下溢） & 9.8475\%\\
+64 & -347.805 & 0（下溢） & 54.7464\%\\
+\bottomrule
+\end{tabular}
+\caption{CHUNK range probe；这是范围证据，不等同于完整 kernel 对拍。}
+\end{table}
+
+因此，CHUNK=32 并非“只增加一行常量”即可安全使用。可行方案必须在
+chunk 内使用 rescale、保留更高精度的门控累计量，或改变 workspace 的表示；
+否则下溢会先破坏 recurrence 的语义。
+
+\subsection{Neumann 求逆与 MMA 形状}
+
+K2 的 chunk 内 inverse 使用 16\(\times\)16 的 Neumann 级数分块，现有
+\code{SM80\_16x8x16} atom 恰好覆盖该形状。CHUNK=16 使 K1/K2 workspace、
+TMA tile 和 shared-memory ring buffer 的边界一致；增大 CHUNK 会同时增大
+中间矩阵、寄存器活跃范围和同步粒度。数值、tile 和存储三个约束是耦合的，
+不能只根据理论 FLOP 减少判断收益。
+
+\section{讨论点二：tcgen05 是否能直接替换}
+
+在 B300 上运行 CUTLASS CuTe 的 SM100 对照 microbench，使用
+F16\(\times\)F16\(\rightarrow\)F32、\(M=128,N=256,K=64\)、TMEM accumulator
+和单 CTA cluster，执行成功并与 CPU reference exact。将 M/N 改成原 K2 的
+16\(\times\)16 后，nvcc 在实例化阶段直接报：
+
+\begin{lstlisting}
+SM100_MMA_F16BF16 M-mode size should be 64 or 128
+UMMA_1SM M-mode size should be 64 or 128
+\end{lstlisting}
+
+因此 tcgen05 的最小 M tile 与 K2 的 16\(\times\)16 state update 不匹配。
+即使把矩阵扩大到 64/128，也必须重新设计：
+\begin{enumerate}
+  \item M/N tile 与 head/CTA 的映射；
+  \item TMEM accumulator 的分配和释放；
+  \item shared-memory swizzle、TMA descriptor 和 barrier；
+  \item 大 tile 对 chunk recurrence、状态复用和 epilogue 的影响。
+\end{enumerate}
+
+独立 tcgen05 微内核确实显示 2-SM state probe 比 1-SM 快约 15--18%，direct
+epilogue 比通用 AXPBY 约快 0.8--3%。但这些是局部 microbench，不能推导完整
+FlashKDA K2 会有同样收益；完整路径的状态依赖和同步成本没有被微内核覆盖。
+
+\section{讨论点三：K2 还能从哪里获得并行度}
+
+同一 head 的 chunk recurrence 满足
+\[
+  S_{t+1}=F(S_t,X_t),
+\]
+因此不能把同一 head 的相邻 chunk 任意分给多个 CTA。可行候选及反例如下：
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabularx}{\linewidth}{@{}L{0.20\linewidth}L{0.32\linewidth}X@{}}
+\toprule
+方案 & 理论收益 & 主要反例/代价\\
+\midrule
+多 head/CTA & 摊薄 launch 和 descriptor 成本 & H=96 已有足够 head 并行；顺序处理多个 head 不会缩短单 head 临界路径，且减少 CTA 数\\
+persistent CTA & 复用线程和同步资源 & 需要跨 head/sequence 的任务队列；状态生命周期、负载均衡和边界处理复杂\\
+2-CTA value split & 增加同一 head 的列方向并行度 & 重复读取 K1 workspace，CTA 翻倍；H=96 实测慢约 11--14\%\\
+大 CHUNK & 减少 recurrence 次数 & 下溢、shared-memory、寄存器和 inverse 误差同时增加\\
+\bottomrule
+\end{tabularx}
+\caption{K2 并行度候选的结构性比较。}
+\end{table}
+
+R11 的固定开销实验量化了 shape 依赖：H=1/H=4 的 V-split 分别快约
+12.5\%/10.8\%，而 H=96 慢约 14.1\%。H=96 baseline 为 grid=(1,96,1)、
+block=192；V-split 为 grid=(1,192,1)、block=128。shared memory 虽由
+98.4 KiB 降到 68.6 KiB，但额外 CTA 和计算 warp 减少更昂贵。因此“降低
+shared memory”本身不是并行度收益的充分条件。
+
+\section{讨论点四：compute-bound 还是 memory-bound}
+
+K1 prepare 和 K2 recurrence 必须分开看。K1 的 achieved occupancy 约 97\%，
+compute/memory throughput 均较高，接近常规输入投影 GEMM。K2 的 tensor-pipe
+活跃度约 20\%、memory throughput 约 38\%、occupancy 约 9.37\%，同时存在
+较长的 scoreboard/barrier/TMA 等待。更准确的表述是：
+
+\begin{record}{瓶颈判定}
+K2 不是纯粹的 memory-bound，也不是可以忽略同步的 compute-bound。它是一个
+受状态依赖和低并行度限制的 recurrence kernel；shared-memory/TMA 流量、
+MMA 计算、barrier 和 output materialization 共同决定时间。NCU 中 DRAM
+throughput 偏低不能单独证明“带宽还有大量可用空间就一定能加速”，反过来也
+不能把寄存器减少写成端到端收益。
+\end{record}
+
+R10 的 pair-packed direct store 就是反例：V-split 内部比 scalar direct
+快约 42\%，但仍比最佳 non-split baseline 慢约 14.2\%；non-split direct
+还增加了寄存器。结构优化必须落在临界路径上，不能只看某个局部指令或流量
+计数器。
+
+\section{讨论点五：state bf16 精度验证}
+
+精度实验同时比较 bf16 state、fp32 state、FlashKDA output/final state 和
+\Fla{} reference，并覆盖单 chunk、跨 chunk、varlen、B=2 和 tail case。
+需要区分“接口为 fp32”和“内部 recurrence 为 fp32”：当前源码将 global
+fp32 state 转成 shared-memory bf16，递推结束再转回 fp32，因此 fp32 分支不
+代表内部全程 FP32。
+
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{lrr}
+\toprule
+比较 & max abs & mean abs\\
+\midrule
+FlashKDA output vs \Fla{} & \(4.883\times10^{-4}\) & \(1.290\times10^{-5}\)\\
+FlashKDA final state vs \Fla{} & \(3.915\times10^{-3}\) & \(9.136\times10^{-5}\)\\
+bf16-state output vs fp32-state output & 0 & 0\\
+FlashKDA B300 fixed output/state vs native reference & 0 difference & 0 difference\\
+\bottomrule
+\end{tabular}
+\caption{state 精度和正确性证据。5090 的严格 torch.equal 诊断单独记录，不冒充 B300 exact。}
+\end{table}
+
+验证方案的关键不是只报一个 max error，而是把 output 和 final state 分开，
+按 T=16、17、64、8192、varlen 和 B=2 分层，记录 mismatch count、max/mean
+absolute error、relative error 和首次出现误差的 chunk。这样才能区分接口
+舍入、跨 chunk 累积误差和真正的状态更新错误。
+
+\section{挑战实验：哪些方向接近 baseline}
+
+下表汇总 R3--R12 的完整 output 或结构性候选。不同轮次的绝对时间受节点
+频率、benchmark harness 和源码构建影响，因此表中优先报告相对同源 control
+的比例。
+
+\begin{longtable}{@{}L{0.10\linewidth}L{0.28\linewidth}L{0.25\linewidth}L{0.25\linewidth}@{}}
+\toprule
+轮次 & 改动 & exactness & 性能结论\\
+\midrule
+\endhead
+R3 & 64+64 value-column split & 通过 & H=96 明显慢；BF16 split 曾约为 baseline 的 3.18 倍\\
+R4 & sliced TMA/compact shared & 通过 & shared memory 降约 30.3\%，仍慢 13.7--18.5\%\\
+R7 & state-only，关闭 output materialization & state exact & H=96 快 19.1\%，但没有完整 output，只是上限诊断\\
+R8 & output stage=1/3 & 通过 & stage=1 慢约 6.1\%；stage=3 首次约快 1.6\%，不可复现\\
+R8 & fused output GEMM conversion/add & 通过 & default H=96 慢约 1.5\%，属于接近 baseline\\
+R9 & fragment→global 映射诊断 & 显式逆映射 0 mismatch & 本轮无性能候选\\
+R10 & scalar/pair-packed direct store & 通过 & V-split 内部快 42.1\%，但仍慢于最佳 baseline 约 14.2\%\\
+R11 & compact output storage & 通过 & 主导 shared union 未改变，无稳定收益\\
+R11 & swizzled shared→TMA & 通过 & H=96 慢 71--72\%；H=1/4 近似持平\\
+R12 & stage=3 复测 & 通过 & 1.0294 vs 1.0272 ms，慢约 0.2\%，稳定持平\\
+R12 & fused STSM→TMA epilogue & 通过 & 1.0287 vs 1.0272 ms，慢约 0.15\%，稳定持平\\
+R13 & CHUNK=32 common exponent shift probe & reference 表示可行 & 消除约 15\% zero/14\% inf，但未进入完整 kernel\\
+R14 & K1/K2 workspace recompute fusion & 编译通过，smoke 失败 & 五个 case 均出现 output mismatch，未进行性能宣称\\
+\bottomrule
+\caption{主要挑战路线的结果分类。}
+\end{longtable}
+
+严格按“完整 H=96、同源 baseline、差距不超过 5\%”统计，出现过三个近似
+思路：R8 fused add、R12 stage=3、R12 fused TMA。其中 R12 的两个结果经过
+同源复测，属于可重复的持平；没有一个候选形成可确认的超过 baseline 的收益。
+
+\section{两个高潜力结构方向的评估}
+
+\subsection{K1/K2 workspace fusion}
+
+当前 K1 prepare 将中间 workspace 写入 global/shared 结构，K2 再通过 TMA 或
+shared ring 读取。若 K1 的 producer 与 K2 的 consumer 能在同一 kernel 或
+紧邻的 persistent pipeline 中衔接，可以尝试消除一次 workspace 写入/读取、
+减少 descriptor 和 barrier，并缩短数据到达 recurrence 的路径。该方向的
+收益上限高于单纯改 output store，但需要回答三个问题：
+
+\begin{enumerate}
+  \item K1 的 token-parallel 结果是否能按 K2 的 head/chunk 顺序及时产生；
+  \item K1/K2 共享的 shared-memory footprint 是否会降低 occupancy；
+  \item producer-consumer barrier 是否抵消了省下的 global traffic。
+\end{enumerate}
+
+因此应先做 opt-in 最小 prototype，要求 output/final state exact，随后用
+NSYS/NCU 分别测 workspace bytes、barrier wait 和 end-to-end latency。若只能
+减少流量而不能缩短 recurrence 临界路径，则不应把它写成 memory-bound 的证明。
+
+R14 将这个设想实现为一个完整 non-split K2 的 opt-in prototype。K2 直接加载
+原始 q/k/g，在三个原有输入 buffer 中重建 normalize、gate/cumsum、decay、
+\(L/Mqk\) 和 Neumann inverse。B300 上初次构建因 BF16/FP16 alias 和
+CTA-wide barrier 出错，分别修正后 job 24945 编译成功；但修正 barrier 后的
+job 24949 在 T=16,H=96、T=17,H=1、T=64,H=1 等五个基础 case 中均未通过
+output exactness，state-in/out case 也出现明显 state mismatch。因此这条路线
+还没有可比较的 end-to-end 时间。
+
+失败的含义并不是 workspace fusion 在理论上必然无效，而是它不能被实现成
+“多加载三个原始 tensor”这么简单的局部改动。K1 的 TMA destination、256-thread
+prepare map、K2 的 128-thread recurrence map、stage reuse 和 barrier 生命周期
+必须同时保持。当前 prototype 的正确性门槛尚未通过，任何关于省下 workspace
+traffic 的速度估计都不应写成实测收益。
+
+\subsection{CHUNK=32/64 与 rescale}
+
+增大 CHUNK 能减少 chunk recurrence 次数，理论上是更可能超过 10\% 的算法级
+方向；但必须同步设计 rescale。例如把累计门控量分解为块内相对指数和块间
+scale，使中间 bf16 写回落在可表示范围，再在 output/state 阶段恢复整体尺度。
+验收顺序应为：
+
+\begin{enumerate}
+  \item 先在纯 PyTorch/reference 中扫描随机和极端 gate，验证 rescale 的代数
+  等价性和误差随序列长度的增长；
+  \item 再实现单 chunk、跨 chunk、tail、varlen 和 B=2 的 opt-in kernel；
+  \item 最后比较 shared memory、寄存器、MMA 次数和 CUDA-event 时间。
+\end{enumerate}
+
+若 CHUNK=32 需要大量额外 scale、barrier 或寄存器，理论上减少的 recurrence
+次数可能被资源开销吃掉；若不能保持题目要求的精度，则应将结果作为数值边界
+实验，而不是性能方案。
+
+R13 在 B300 上实现了这一方向的第一步 reference probe。对 CHUNK=32，balanced
+shift 将两个 factor 的指数范围压到约 \([-91.68,91.68]\)，原始
+\(2^s\)/\(2^{-s}\) 的约 15\% zero/14\% inf 被消除；但 CHUNK=64 仍需
+约 \([-171.06,171.06]\)，超出 bf16 范围。更重要的是，shift 后的
+\(q_dS^\mathsf{T}\) 和 \(k_dS^\mathsf{T}\) 需要按 key-channel 恢复 scale，
+而现有 K1 的 factor product probe 在 CHUNK=32/64 分别有约 4.6\%/12.5\%
+超出 FP16 中间表示范围。故 R13 只证明“scaled-state v2 值得单独设计”，
+没有修改 CHUNK=16 默认 kernel，也没有产生性能数字。
+
+\section{讨论点六：是否发布 SM100a 专版}
+
+\subsection{支持发布的论据}
+
+SM100/Blackwell 提供更大的矩阵指令和 TMEM 机制；若重新设计 tile 和状态布局，
+可能减少寄存器累加、提高 tensor-pipe 利用率，并通过 workspace fusion 或大
+CHUNK 降低 recurrence 固定开销。对于固定的 H=96、D=128 和稳定的 SM100
+部署，维护专版可以牺牲一部分可移植性换取峰值性能。
+
+\subsection{反对立即发布的论据}
+
+当前 tcgen05 的 tile 契约与 16\(\times\)16 recurrence 不匹配，不能局部替换。
+完整重写将同时改变 layout、TMEM 生命周期、TMA descriptor、barrier、tail
+predicate 和 epilogue；任何一个环节出错都会表现为跨 chunk 的 silent error。
+此外，当前 SM80 路径已经在 B300 上约 1.03 ms，并在 H=96 对 FLA 有明显优势；
+若专版只达到持平，却增加一套高维护成本的架构分支，工程收益并不成立。
+
+\begin{decision}{SM100 v2 决策}
+目前不把 SM100a 专版作为默认实现，也不把独立 tcgen05 microbench 写成
+完整 kernel 的性能承诺。若后续 workspace fusion 或 CHUNK+rescale 的 profile
+证明 SM100 仍有超过 10\% 的结构性空间，再以独立 branch 进行 tile/layout
+重构；R13/R14 的当前负结果反而说明这两条路线都需要新的 ABI/layout 和
+精度协议。在此之前，SM80 通用路径是更合理的 v1 选择。
+\end{decision}
+
+\section{结论}
+
+本题的核心结论不是“没有找到一条更快的指令”，而是建立了一个可反驳的因果链：
+\(16\) 的 CHUNK 由数值范围、Neumann 级数和 MMA 形状共同约束；tcgen05 的
+最小 tile 破坏了现有 K2 的局部结构；同一 head 的 recurrence 限制了 CTA 并行；
+H=96 的实际瓶颈包含同步和状态依赖，不能简化为 DRAM 带宽。多轮 exactness
+实验进一步表明，减少 shared storage 或改写 output store 并不等于端到端
+加速。完整 output 候选已经能够稳定追平 baseline，但没有可复现的正收益。
+
+因此，官方停在 SM80 是一个有工程依据的决定，而不是尚未尝试 tcgen05 的遗漏。
+如果目标是继续追求超过 10\%，应优先做 K1/K2 workspace fusion 或 CHUNK+rescale
+这类结构性实验，并接受较高的实现和数值风险；如果目标是完成 C1，当前证据已足以
+支持“SM80 v1 保持、SM100 v2 暂缓”的结论。
+
+\section*{可复核材料}
+
+完整逐轮命令、构建环境、失败尝试和远程 Slurm 日志见
+\href{C1_EXPERIMENT_RECORD.tex}{\code{C1\_EXPERIMENT\_RECORD.tex}}；
+结果索引见 \href{results/README.md}{\code{results/README.md}}。代码和轻量日志
+均保留在仓库，默认构建关闭所有 challenge 开关。
+
+\end{document}

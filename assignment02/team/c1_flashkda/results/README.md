@@ -278,3 +278,35 @@ R11 的完整命令、失败布局、exactness 判据与判定见
 R12 的完整命令、stage 噪声辨析、fused layout 实现和判定见
 `../C1_R12_EXECUTION_SECTION.tex`。R12 fused 路径保留为 opt-in 参考，不进入
 默认构建。
+
+## R13：CHUNK=32/64 common-exponent rescale
+
+- `../challenge/chunk_rescale_probe.py`、`chunk_rescale_b300_v3.json` 和
+  `chunk_rescale_b300_v3.log`：B300 scalar range 和 factor-product probe。
+  CHUNK=32 的 balanced shift 将指数范围压到 `[-91.68,91.68]`，消除原始
+  factor 约 15% zero/14% inf；CHUNK=64 仍为约 `[-171.06,171.06]`，超出
+  BF16 表示范围。
+- CHUNK=32 的 `k_restored` mean relative diff 约 `1.86e-8`，但现有 K1
+  FP16 accumulator 的 factor-product overflow proxy 约 4.6%；CHUNK=64
+  约 12.5%。这不是完整 kernel exactness 或性能结果，不能宣称 rescale
+  已经加速。
+
+R13 的完整设计、命令、数值解释和未接入原因见
+`../C1_R13_EXECUTION_SECTION.tex`。默认 CHUNK=16 kernel 未改变。
+
+## R14：K1/K2 workspace fusion
+
+- `r14_remote/r14_build_initial.log`、`r14_build_inverse_fix.log` 和
+  `r14_build_barrier_fix.log`：workspace-recompute prototype 的三次构建。
+  初次 inverse BF16/FP16 alias 和 CTA-wide barrier 问题修正后，SM103a
+  extension 成功编译。
+- `r14_remote/r14_ws_smoke_24949.json`/`.log`：K2 直接加载 q/k/g、在
+  recurrence 内重建 K1 中间量的五 case smoke。虽然编译通过，五个 case
+  的 output 均不 exact，带 state 的 case 同时出现 state mismatch；未进入
+  benchmark。
+- 默认宏 `FLASH_KDA_C1_FUSED_WS` 保持关闭，实验新增的 `k_inv/L` 临时
+  storage 条件编译，不改变默认 K2 shared-memory footprint。
+
+R14 的完整代码改动、死锁修正、exactness 数据和失败原因见
+`../C1_R14_EXECUTION_SECTION.tex`。该路线目前只能作为需要重新设计
+CuTe physical layout、线程映射和 pipeline 生命周期的结构性候选。
