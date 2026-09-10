@@ -1,0 +1,195 @@
+\section{R13 执行记录：大 CHUNK 的 common-exponent rescale 评估}
+
+\subsection{目标和边界}
+
+R12 之后重新评估 ``大 CHUNK + rescale''。现有实现固定
+\code{CHUNK=16}，K1 在每个 token/channel 上形成 gate 的前缀和
+\(s_r=\sum_{i\leq r}g_i\)，并把以下中间量以 BF16 写入 workspace：
+\[
+ q_d=q\,2^{s_r},\quad k_d=k\,2^{s_r},\quad
+ k_i=k\,2^{-s_r},\quad k_r=k\,2^{-s_r}2^{s_{\mathrm{last}}}.
+\]
+当前 gate 的 \code{lower\_bound=-5} 使得 CHUNK 增大后，\(2^{s_r}\) 会
+下溢，而 \(2^{-s_r}\) 会溢出。R1 已有的标量 probe 只说明了风险；本轮
+进一步测试一个可以在实数运算中保持乘积不变的 common shift，并判断它是否
+适合现有 BF16 workspace 和 SM80 FP16-accumulator MMA。
+
+本轮不修改默认 \FlashKDA{} launch，也不把未完成的 CHUNK=32 kernel 接入
+Python API。新增脚本只用于表示范围和误差诊断；若要进入生产路径，必须另外
+设计 workspace ABI、K1/K2 的 TMA descriptor 以及 state projection 的缩放协议。
+
+\subsection{候选变换}
+
+对每个 tile/channel 取一个 shift \(c\)，把 K1 的三个带指数中间量替换为
+\[
+ q'_d=q\,2^{s_r-c},\quad k'_d=k\,2^{s_r-c},\quad
+ k'_i=k\,2^{-s_r+c},
+\]
+并以
+\[
+ k'_r=k\,2^{-s_r+c}2^{s_{\mathrm{last}}-c}
+\]
+形成 restored key。于是，忽略有限精度时，
+\[
+ k'_d(k'_i)^\mathsf{T}=k_d k_i^\mathsf{T},\qquad
+ q'_d(k'_i)^\mathsf{T}=q_d k_i^\mathsf{T},\qquad
+ k'_r=k_r.
+\]
+本轮使用\(c=(\min_r s_r+\max_r s_r)/2\)，即把正、负指数范围对称放置。
+对当前全为负的 gate，\(\max s_r\) 接近零；CHUNK=32 的样本中 shift 大约
+落在 \([-97.59,-49.94]\)，CHUNK=64 中落在 \([-176.86,-114.89]\)。
+
+这个变换只保持 K1 内部的指数乘积。它并不自动保持 K2 的所有运算：
+\[
+ k'_d S^\mathsf{T}=2^{-c}(k_d S^\mathsf{T}),\qquad
+ q'_d S^\mathsf{T}=2^{-c}(q_d S^\mathsf{T}).
+\]
+因此 K2 在计算 \(v-k_dS^\mathsf{T}\) 和输出的 \(q_dS^\mathsf{T}\) 时，需要
+对 state 投影或 MMA 结果补回 \(2^c\)。如果 \(c\) 按 channel 变化，补偿也按
+key channel 变化，不能用一个 scalar epilogue 乘法解决。
+
+\subsection{新增 probe 和本地检查}
+
+新增 \code{challenge/chunk\_rescale\_probe.py}。它包含两部分：
+
+\begin{enumerate}
+  \item 对一百万个与 benchmark 相同分布的 gate scalar，分别计算
+        CHUNK=16/32/64 的原始和 balanced-shift 指数范围，并统计 BF16
+        转换后的 zero/inf fraction；
+  \item 对 8 个 \(D=128\) tile，把 rescaled BF16 factor 代入小型矩阵乘法。
+        乘法在 FP32 中执行，作为输入表示误差的诊断；另将每个 factor
+        product 转为 FP16，统计现有 K1 FP16 accumulator 可能遇到的溢出。
+        这不是 tensor-core bitwise model，不能替代完整 kernel exactness。
+\end{enumerate}
+
+脚本首先做 Python 语法检查：
+
+\begin{lstlisting}
+python -m py_compile \\
+  assignment02/team/c1_flashkda/challenge/chunk_rescale_probe.py
+\end{lstlisting}
+
+在同步到 B300 后，使用 assignment venv 和 GPU allocation 运行：
+
+\begin{lstlisting}
+scp challenge/chunk_rescale_probe.py infrab300:<B300_REPO>/assignment02/team/c1_flashkda/challenge/
+
+ssh infrab300 'set -o pipefail;
+  C1_ROOT=<B300_REPO>/assignment02/team/c1_flashkda;
+  C1_PY=<B300_REPO>/assignment02/.venv/bin/python;
+  cd "$C1_ROOT/FlashKDA";
+  srun --partition=gpu --gres=gpu:1 --cpus-per-task=8 --time=00:10:00
+    --chdir="$PWD"
+    env PATH=<B300_REPO>/assignment02/.venv/bin:$PATH
+    "$C1_PY" -u ../challenge/chunk_rescale_probe.py
+    --samples $((1<<20)) --seed 0
+    --json ../results/chunk_rescale_b300_v3.json
+    2>&1 | tee ../results/chunk_rescale_b300_v3.log'
+\end{lstlisting}
+
+实际最终 run 为 Slurm job 24938；此前 job 24928/24931 是同一 probe 的
+初版和增加 FP16 overflow 统计的复测，最终 JSON/log 采用 24938。probe 脚本
+和结果在 commit \code{7f78cec} 推送；R13 没有改动 R12 的默认 kernel。
+
+\subsection{B300 范围结果}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}c c c c c c@{}}
+\toprule
+CHUNK & raw \(s\) range & shifted \(s-c\) range & common shift fits BF16
+  & raw \(2^s\) zero & raw \(2^{-s}\) inf \\
+\midrule
+16 & \([-103.07,0]\) & \([-48.24,48.24]\) & yes & 0\% & 0\% \\
+32 & \([-189.27,0]\) & \([-91.68,91.68]\) & yes & 14.96\% & 13.64\% \\
+64 & \([-347.81,0]\) & \([-171.06,171.06]\) & no & 57.47\% & 56.79\% \\
+\bottomrule
+\end{tabular}
+\caption{B300 job 24938 的 scalar range probe。zero/inf 是原始 factor
+写入 BF16 后的比例；shifted factor 的 CHUNK=32 zero/inf 均为 0，
+CHUNK=64 仍分别约为 6.82\%/6.14\%。}
+\end{table}
+
+CHUNK=32 的结果说明 common shift 在“factor 能否表示”为止是有效的：
+原始正指数有 14.96\% 的 BF16 zero，原始负指数有 13.64\% 的 BF16
+inf；平衡后两个指数范围均为 \([-91.68,91.68]\)，转换后没有 zero/inf。
+但是 CHUNK=64 的平衡范围仍达到 \([-171.06,171.06]\)，超过 BF16 的
+有效指数范围，单个 common shift 不能同时消除两侧问题。R13 因此只把
+CHUNK=32 作为后续 kernel 设计候选，CHUNK=64 直接判为需要分段 rescale
+或 FP32/更高精度表示。
+
+\subsection{factor 乘积和 accumulator 风险}
+
+在 8 个 tile、\(D=128\) 的表示 probe 中，CHUNK=32 的 prefix 范围为
+\([-200.24,-0.02]\)，CHUNK=64 的 prefix 范围为
+\([-407.90,-0.003]\)。balanced shift 后，\(k_r\) 与未缩放的 float64
+代数值在 BF16 输入、FP32 乘法的近似比较中表现为：
+
+\begin{center}
+\small
+\begin{tabular}{@{}c r r r r@{}}
+\toprule
+CHUNK & \(L\) FP16-term overflow & \(Mqk\) FP16-term overflow
+  & \(k_r\) mean relative diff & overflow denominator \\
+\midrule
+32 & 48,129 (4.59\%) & 48,347 (4.61\%)
+  & \(1.86\times10^{-8}\) & 1,048,576 \\
+64 & 525,971 (12.54\%) & 526,735 (12.56\%)
+  & \(1.53\times10^{-4}\) & 4,194,304 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+overflow 统计是在完整 \(\text{CHUNK}\times\text{CHUNK}\times D\) 的 factor
+product 上进行，其中包含随后会被 \code{tril} 清零的上三角，因此它是
+保守的结构警告，而不是 kernel exactness 结论。即便如此，现有 K1 的
+\code{mma\_m16n16\_bf16bf16fp16\_1warp} 会先计算完整块，再由线程清理
+上三角；balanced factor 可能把未使用的上三角中间项推到 FP16 accumulator
+范围之外。当前代码没有“只计算下三角”的 MMA 变体可以直接套用。
+
+\subsection{为什么没有构建完整 CHUNK=32 kernel}
+
+把 \code{constexpr int CHUNK=16} 改为 32 不是单点修改，至少会同时影响：
+
+\begin{itemize}
+  \item \code{WorkspaceSizes}、六个 workspace array 的 TMA shape/stride、
+        \code{INV/Mqk} 的 \(16^2\to32^2\) 存储和 Neumann inverse；
+  \item K1 的 \code{K1Layouts<D,CHUNK>}、gate cumsum、decay apply、
+        \code{L/INV/Mqk} 的线程分工和 shared-memory union；
+  \item K2 的输入 TMA transaction、每个 tile 的 pipeline buffer、
+        state/output fragment mapping 以及每个序列的 tile 数；
+  \item Python 扩展的 workspace size ABI，以及 varlen/batched 的 tile prefix；
+  \item rescale metadata。若 \(c\) 按 channel 选择，K2 至少需要读回
+        \(D\) 个 shift，且在 state projection 中使用相应的反缩放。
+\end{itemize}
+
+更关键的是，common shift 只保证 \(q_d k_i^\mathsf{T}\) 等内部乘积在
+实数代数中的缩放抵消。K2 还直接使用 \(q_dS^\mathsf{T}\) 和
+\(k_dS^\mathsf{T}\)，所以若不修改 state operand 或 accumulator，输出和
+\(U\) 都会带上 \(2^{-c}\) 的错误缩放。把 state operand 乘上每个 channel
+的 \(2^c\) 又会引入额外的 BF16 rounding、shared/register 变换和 state
+布局开销；若让大 factor 在 MMA 内先相乘，则会遇到上面的 FP16 intermediate
+overflow。由此，rescale 需要一套新的“scaled-state + FP32/delayed-scale
+projection”设计，而不是在 K1 的 exp2 指令前后加一条乘法。
+
+\begin{decision}{R13 接入决策}
+CHUNK=32 的 common shift 解决了 BF16 factor 的直接 zero/inf，但没有解决
+现有 K1/K2 的 accumulator 和 state projection 语义；CHUNK=64 连 factor
+范围都无法解决。本轮不提交完整 CHUNK=32 kernel，不改变默认构建，保留
+\code{chunk\_rescale\_probe.py} 及 B300 原始 JSON/log 作为负结果证据。
+若未来投入 v2，合理的实现顺序是：先把 shift metadata 和 scaled-state
+projection 做成独立 reference，随后用 FP32 accumulator 或分段 16-token
+MMA 验证 exactness，最后才评估更大的 chunk 是否抵消额外 metadata 和
+state scaling 成本；不能把本轮 factor range 的改善直接解释为端到端加速。
+\end{decision}
+
+\begin{record}{R13 结论}
+B300 job 24938 证明：CHUNK=32 存在一个数值范围上可行的 common exponent
+shift，能把当前约 15\% zero/约 14\% inf 的原始 BF16 factor 表示变为
+有限值；但这个变换会改变 K2 对 state 的两个直接投影，且 balanced factor
+在现有 FP16 accumulator 的完整 GEMM tile 中产生中间溢出风险。CHUNK=64
+在同一 shift 下仍超出 BF16 exponent range。故本轮产出的是“值得独立设计
+scaled-state v2”的证据，不是可接入的性能优化；当前默认 kernel 仍为
+R12 后的 baseline/opt-in 配置。
+\end{record}

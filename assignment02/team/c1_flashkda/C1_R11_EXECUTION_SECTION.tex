@@ -75,7 +75,7 @@ R11-B swizzled TMA store: mismatches=0 total=2048 cosize=2048 bytes=4096
 
 随后用真实 K2 的 \([\text{CHUNK},D]=[16,128]\) 形状直接套用 swizzle。
 job 24702 发生 illegal memory access，说明不能仅把原有 row-major 的
-\([\text{token},\text{value}]) 逻辑 layout 替换为 swizzle。最终采用与 TMA
+\([\text{token},\text{value}]\) 逻辑 layout 替换为 swizzle。最终采用与 TMA
 major mode 一致的 \([D,\text{CHUNK}]=[128,16]\) shared 逻辑 tile，保留
 物理 output pointer 不变，只在 launch 中增加一个 \([H,D,T]\)、stride
 \((D,1,DH)\) 的 gmem view。
@@ -244,4 +244,3 @@ R11 不改变默认构建：\code{C1\_K2\_TMA\_SWIZZLED\_OUTPUT}、
 后续优化若继续，应优先研究 H=96 的 CTA 融合/warp-specialized epilogue 与
 真实 output-storage 生命周期；不应把当前 swizzled materialization 直接
 接入默认路径，也不应仅凭 shared-memory 或 DRAM 指标宣称已达到题目目标。
-
