@@ -1,0 +1,18 @@
+[
+  {
+    "document": "C1_REPORT",
+    "compiler": "latexmk -xelatex -interaction=nonstopmode -halt-on-error",
+    "exit_code": 0,
+    "pages": 10,
+    "pdf_sha256": "65e4633342658369eaff21745e90fc46f002cedd2e6013d39766780fc844da74",
+    "source_sha256": "f6255d3d5635d7a90e0d800292ba7cae1a8247a35daf339ca8dd716ae6f617e4"
+  },
+  {
+    "document": "C1_EXPERIMENT_RECORD",
+    "compiler": "latexmk -xelatex -interaction=nonstopmode -halt-on-error",
+    "exit_code": 0,
+    "pages": 98,
+    "pdf_sha256": "c1b0c846275af6c61caf2467735fb6ab18b09f58f8d0921e2f0c864efb2827ac",
+    "source_sha256": "ac13eaa9a459c5bd756a572e506bc23133057a6298fa42eef04e791563d9a877"
+  }
+]

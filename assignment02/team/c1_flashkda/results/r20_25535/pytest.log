@@ -1,0 +1,16 @@
+No entry for terminal type "unknown";
+using dumb terminal settings.
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/lcpu/10578328/c1_r19_run_20260910c/vm8pre_ew
+plugins: anyio-4.15.1
+collecting ... collected 580 items / 576 deselected / 4 selected
+
+tests/test_fwd_full.py::test_fwd_long[T131072] PASSED                    [ 25%]
+tests/test_fwd_full.py::test_fwd_long[T1048576] PASSED                   [ 50%]
+tests/test_fwd_full.py::test_fwd_long_varlen[seqs131072] PASSED          [ 75%]
+tests/test_fwd_full.py::test_fwd_long_varlen[seqs524288_524288] PASSED   [100%]
+
+- generated xml file: /home/lcpu/10578328/c1_r20_run_20260911a/long_25535/pytest.xml -
+================= 4 passed, 576 deselected in 71.20s (0:01:11) =================

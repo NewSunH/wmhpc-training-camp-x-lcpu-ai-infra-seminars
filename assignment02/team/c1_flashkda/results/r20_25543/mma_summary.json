@@ -1,0 +1,49 @@
+{
+  "source": "run.log",
+  "build": "release -DNDEBUG",
+  "aggregate": "arithmetic mean of two ABBA slot means",
+  "cases": [
+    {
+      "ctas": 1,
+      "sm80_slot_means_us": [
+        4.467568,
+        4.4656
+      ],
+      "tcgen05_slot_means_us": [
+        15.171744,
+        15.172752
+      ],
+      "sm80_mean_us": 4.466584,
+      "tcgen05_mean_us": 15.172248,
+      "tcgen05_over_sm80_latency_ratio": 3.396834807091952
+    },
+    {
+      "ctas": 12,
+      "sm80_slot_means_us": [
+        4.46792,
+        4.467792
+      ],
+      "tcgen05_slot_means_us": [
+        15.33744,
+        15.335616
+      ],
+      "sm80_mean_us": 4.467856,
+      "tcgen05_mean_us": 15.336528000000001,
+      "tcgen05_over_sm80_latency_ratio": 3.432637041122185
+    },
+    {
+      "ctas": 96,
+      "sm80_slot_means_us": [
+        4.719872,
+        4.7216
+      ],
+      "tcgen05_slot_means_us": [
+        15.878224,
+        15.875536
+      ],
+      "sm80_mean_us": 4.720736,
+      "tcgen05_mean_us": 15.87688,
+      "tcgen05_over_sm80_latency_ratio": 3.363221328199671
+    }
+  ]
+}

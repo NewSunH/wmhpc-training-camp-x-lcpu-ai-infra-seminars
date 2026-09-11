@@ -1,0 +1,12 @@
+starting baseline -> /home/lcpu/10578328/c1_r20_run_20260911a/bench_25537/0_baseline.json
+baseline: T=16 H=96 lengths=None: 0.031104 ms
+baseline: T=64 H=96 lengths=None: 0.041408 ms
+baseline: T=256 H=96 lengths=None: 0.082768 ms
+baseline: T=1024 H=96 lengths=None: 0.250528 ms
+baseline: T=8192 H=96 lengths=None: 1.771968 ms
+baseline: T=32768 H=96 lengths=None: 7.010736 ms
+baseline: T=8192 H=12 lengths=None: 1.360384 ms
+baseline: T=8192 H=64 lengths=None: 1.626480 ms
+baseline: T=8192 H=96 lengths=[1300, 547, 2048, 963, 271, 3063]: 1.484336 ms
+baseline: T=131072 H=1 lengths=None: 20.252736 ms
+baseline: T=1048576 H=1 lengths=None: 161.789040 ms

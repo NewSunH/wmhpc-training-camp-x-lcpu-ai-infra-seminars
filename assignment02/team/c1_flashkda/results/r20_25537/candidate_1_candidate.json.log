@@ -1,0 +1,12 @@
+starting candidate -> /home/lcpu/10578328/c1_r20_run_20260911a/bench_25537/1_candidate.json
+candidate: T=16 H=96 lengths=None: 0.031136 ms
+candidate: T=64 H=96 lengths=None: 0.041376 ms
+candidate: T=256 H=96 lengths=None: 0.080288 ms
+candidate: T=1024 H=96 lengths=None: 0.236288 ms
+candidate: T=8192 H=96 lengths=None: 1.652432 ms
+candidate: T=32768 H=96 lengths=None: 6.538464 ms
+candidate: T=8192 H=12 lengths=None: 1.252992 ms
+candidate: T=8192 H=64 lengths=None: 1.503888 ms
+candidate: T=8192 H=96 lengths=[1300, 547, 2048, 963, 271, 3063]: 1.484400 ms
+candidate: T=131072 H=1 lengths=None: 18.350256 ms
+candidate: T=1048576 H=1 lengths=None: 146.518578 ms

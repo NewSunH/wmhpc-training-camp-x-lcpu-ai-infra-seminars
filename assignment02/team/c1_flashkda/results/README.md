@@ -375,3 +375,19 @@ R18 的完整命令、PDL 语义、integrated wiring 和接入判断见
 - `r19_25286/`：最终独立验证，576 tests passed，4 long-sequence stress tests deselected。H96 BF16 `1.746072 → 1.643856 ms`，延迟降低 **5.854%**，速度比 **1.06218×**。H96 no-state 延迟降低 **12.971%**。
 
 最终候选通过六个 build-time 定义启用；`challenge/r19_build_optimized.sh` 提供强制重建入口。默认宏保持关闭。`env_*` 是进程环境，不能用来反推 `.so` 编译配置；实际 module path、SHA 与 build log 才是构建身份。报告区分延迟降低 `1-new/base` 与速度提升 `base/new-1`。
+
+## R20：补全压力回归与历史数学证据勘误
+
+- `r20_25541/`：同形状 MMA 初次编译与 CPU 对拍通过，Graph 捕获因教程调试宏同步失败；仅保留诊断。
+- `r20_25542/`：修正捕获后的初次 MMA 对照，以及 18 组修正数学/范围探针。此 MMA 构建未关闭 CuTe 断言，正式报告改用下一组 release 数据。
+- `r20_25543/`：`-O3 -DNDEBUG` release 的同 BF16 128×128×16 GEMM，1/12/96 CTA；两路径各 1,785,856 元素 CPU exact。tcgen05 教程路径是 SM80 probe 的 3.397/3.433/3.363 倍延迟，仅为独立 GEMM 结论。含 build/run、源码/binary SHA 和实际 BF16 kernel 的 SASS 摘要。18 组修正 float64 分块验证再度通过，最大 O/S 误差 3.33e-16/3.55e-15。
+
+- `r20_25537/`：另一张 B300 的 11 个 BF16-state 边界 benchmark，4 份 ABBA raw JSON、汇总、实际计时输入/输出/状态摘要；H12 T8192 native reference 额外逐位通过。主形状降延迟 6.143%，TP8 7.958%，百万 token H1 9.438%；T16/T64 和 mixed varlen 接近持平。
+- `r20_25537/precision.json`：9 个真实 FP32 token reference 精度 case（弱/随机/强 gate，T256/1024/8192），同时报告仅每 16 token 保存 BF16 state 的受控诊断。kernel 总误差和状态保存误差分开解释，不能外推为模型质量结论。
+
+- `r20_25535/`：同一 R19 最终候选 binary 的四项超长测试全部通过，JUnit 为 `4 tests, 0 failures, 0 errors, 0 skipped`，总耗时 `71.198 s`。H=1、D=128、BF16 state，fixed T=131072/1048576，varlen `[131072]`/`[524288,524288]`。与 R19 的 576 项常规测试合计，该测试文件的 580 项均已通过。耗时包含参考实现，不是 kernel benchmark。
+- 新入口 `../challenge/r20_algebra_probe.py`：正确的 KDA strict-lower `(I+L)^-1`、跨时间共享的 per-key shift 和 state 补偿，分别对照 token recurrence 和未修改的 vendored FP32 函数；CPU 数学/范围诊断不产生 GPU 性能结论。
+
+**历史解释勘误：**上文 R13 的 product-probe 统计不再用于支持合法 common-shift 方案：旧脚本在 `[tiles,C,D]` 上沿 D 求 shift，导致 shift 随 token 改变。R16 旧 reference 保留 L 对角且求 `(I-L)^-1`，与正确 KDA 的严格下三角 `(I+L)^-1` 不一致，其 raw/scaled allclose 不能作为 KDA 正确性证据。旧文件保留以便审计。R13 独立 scalar-range 观测以及 R16 特定物化缩放操作的时间仍是相应探针的数据；后者不是完整融合 kernel 的必要开销。K1 BF16 GEMM 实际使用 FP32 累加后转换 FP16；只有 Neumann inverse 使用 FP16 累加。
+
+详见 `../C1_R20_EXECUTION_SECTION.tex`。上述勘误不影响 R19 独立的生产 kernel 正确性和 ABBA 性能数据。

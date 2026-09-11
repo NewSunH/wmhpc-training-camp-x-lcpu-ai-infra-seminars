@@ -1,0 +1,11 @@
+2026-09-11T01:01:09+00:00
+hostname=dev-slurm
+job_id=25535
+node=dev-slurm
+candidate=/home/lcpu/10578328/c1_r19_run_20260910c/vm8pre_ew
+python=/home/lcpu/10578328/wmhpc-training-camp-x-lcpu-ai-infra-seminars/assignment02/.venv/bin/python
+python_version=Python 3.12.13
+torch=2.13.0+cu130
+torch_cuda=13.0
+cuda_compiler=Build cuda_13.0.r13.0/compiler.36424714_0
+candidate_git=candidate_so_sha256=bab79adfb71f8515b814ff619a1044cf6c975554053fcc0d28f6a2a21c00ad1c

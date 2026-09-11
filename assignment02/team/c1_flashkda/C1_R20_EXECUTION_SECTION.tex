@@ -1,0 +1,304 @@
+\section{R20：完整压力回归、补充基准与数学证据勘误}
+
+\subsection{本轮范围与证据口径}
+
+本轮回应 C1 的数值精度与架构决策问题：补齐 R19 未运行的四项超长测试，
+扩展性能适用范围，并对历史 CHUNK/rescale 推论重新做源码与数学审计。
+本节保留历史实验文件不变，明确列出被撤回的解释；正式论证以
+\code{C1\_REPORT.tex} 中按研究问题组织的结论为准。
+
+\subsection{B300 job 25535：四项超长压力测试全部通过}
+
+2026-09-11，job 25535 在 NVIDIA B300 SXM6 AC 上使用 CUDA 13.0、
+PyTorch 2.13.0+cu130 和 driver 580.126.09，直接加载 R19 最终候选。
+实际 extension SHA-256 为
+\begin{lstlisting}
+bab79adfb71f8515b814ff619a1044cf6c975554053fcc0d28f6a2a21c00ad1c
+\end{lstlisting}
+与 job 25286 的获胜 binary 一致。JUnit XML 的结果为
+\textbf{4 tests，0 failures，0 errors，0 skipped，71.198 s}；
+进程退出状态为 0。
+
+\begin{center}\small
+\begin{tabular}{@{}llr@{}}
+\toprule
+case & 形状/序列组织 & pytest case time (s)\\
+\midrule
+fixed & $T=131{,}072$ & 4.649\\
+fixed & $T=1{,}048{,}576$ & 30.957\\
+varlen & $[131{,}072]$ & 3.885\\
+varlen & $[524{,}288,524{,}288]$ & 31.023\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+四项均为 $H=1,D=128$、BF16 initial/final state，output 和 final state
+对官方 \code{tests/torch\_ref.py} 使用 \code{torch.equal}。
+表中秒数包含测试与参考实现执行开销，不是 kernel 性能基准。
+与 R19 的 576 项常规测试合计，该文件定义的 580 项测试已全部通过，
+其中常规与超长部分来自两个不同 allocation，使用同一候选 binary。
+这不能表述为整仓库所有测试或任意输入空间均已验证。
+原始证据见 \code{results/r20\_25535/pytest.xml}、
+\code{environment.txt}、\code{device.csv} 和 \code{status.txt}。
+
+\subsection{历史数值证据勘误：应撤回哪些推论}
+
+\paragraph{K1 累加类型。}
+\code{utils.cuh} 中
+\path{mma_m16n16_bf16bf16fp16_1warp} 使用的是
+\path{SM80_16x8x16_F32BF16BF16F32_TN}，在 epilogue 才把 FP32
+结果转为 FP16。真正使用 FP16 accumulator 的是后续 Neumann inverse。
+因此 R13/R16 关于“BF16 factor GEMM 在 FP16 内逐项累加”的描述不成立；
+逐个 factor product 转成 FP16 的溢出数量不是实际 GEMM accumulator
+溢出的度量。K1 的 $L$ 与 $M_{qk}$ 又在进入 inverse/recurrence 之前显式
+清零上三角，故被清零位置的非有限值不能单独证明有效输出错误。
+
+\paragraph{R13 的 product probe 缩放轴错误。}
+\path{challenge/chunk_rescale_probe.py} 的
+\code{tile\_product\_error} 产生形状 $[\mathrm{tiles},C,D]$ 的 prefix，
+却调用沿最后一维取 extrema 的 \code{balanced\_shift}。因此该 product
+probe 的 shift 随 token 改变，不是每个 key channel 跨时间共用的常数，
+不能在跨 token GEMM 中按原推导抵消。
+\textbf{撤回 R13 的 $L/M_{qk}$ 产品误差、FP16-term overflow 和 restored-key
+误差表对合法 common-shift 方案的解释。}旧 JSON 仍保留用于追溯。
+R13 独立 \code{range\_case} 的输入形状为 $[\mathrm{samples}/C,C]$，
+缩放轴本身正确，因此它的 scalar 范围观测不受这个 bug 影响；但其
+$A_{\log}$ 和 dt bias 每 scalar 独立采样，不能当作训练或真实 head 的
+时序分布。R20 的新范围诊断改为在时间维固定这些参数。
+
+\paragraph{R16 的三角结构与求逆符号错误。}
+\code{challenge/chunk32\_scaled\_state\_probe.py} 的旧
+\code{chunk\_step} 把 $L$ 对角线保留，并计算 $(I-L)^{-1}$。
+生产 KDA 使用严格下三角
+\[
+ L=\operatorname{strictLower}(K_dK_i^{\mathsf T}),
+ \qquad L_{ij}\leftarrow\beta_i L_{ij},
+ \qquad U=(I+L)^{-1}\operatorname{diag}(\beta)(V-K_dS).
+\]
+这里 $S$ 采用 $[\mathrm{key},\mathrm{value}]$ 方向。
+旧代码两个分支的缩放抵消发生在另一个 recurrence 中，不能证明正确
+KDA 的跨 chunk 等价性。\textbf{撤回 R16 的 float64 allclose 作为正确
+KDA reference 验证的结论。}R16 独立 elementwise microbenchmark 的
+$0.7853\,\mathrm{ms}$ 仍是其特定物化操作的测量，不能解释为完整融合
+kernel 的必要额外成本、性能上界或迁移不可行性证明。
+
+\paragraph{不受上述勘误影响的证据。}
+R19 的生产 kernel、所有已归档 bitwise regression、ABBA event 数据及
+实际 binary 身份均独立于 R13/R16 的数学探针，不受这两处 probe bug
+影响。R20 的超长测试也未使用 R13/R16 参考实现。
+
+\subsection{修正后的数学诊断方法}
+
+新入口 \code{challenge/r20\_algebra\_probe.py} 保留旧文件不变，使用
+CPU float64 分别实现直接逐 token recurrence、正确的分块 triangular
+solve 和有限 Neumann doubling。逐 token 公式对应本地
+\code{fla\_kda\_ref/naive.py} 的 \code{naive\_recurrent\_kda}，
+并实际执行未经修改的 vendored FP32 函数作额外对照。
+float64 oracle 是该公式的高精度转写；不是宣称 vendored 函数内部使用
+float64，因为它会显式把输入转为 FP32。
+
+对每个 $[C,D]$ prefix $p$，正确的 shift 沿时间轴计算：
+\[
+ c_d=\frac{\min_t p_{t,d}+\max_t p_{t,d}}2,
+ \quad K'_d=K\exp(p-c),\quad K'_i=K\exp(-p+c),
+ \quad S'=\operatorname{diag}(\exp c)S.
+\]
+因此 $K'_dS'=K_dS$，$Q'_dS'=Q_dS$；Gram 矩阵的 shift 按 key
+逐项抵消。state update 仍使用未缩放状态以及
+$K_r=K\exp(p_{\rm last}-p)$，避免改变 recurrence 保存语义。
+
+默认扫描 $C=16,32,64$、normal/weak/strong 三类 gate、seed=0/1，
+$D=128,T=263$，包含多个完整 chunk 与尾块。范围模型在每个 head 内
+固定 $A_{\log}$、在每个 key channel 固定 dt bias，只随时间改变 gate
+输入；它模拟 FP32 FTZ 与 BF16 表示范围，不能替代真实 MMA/exp2 指令
+正确性测试。另将 $L$ 的下三角有效区与随后清零的上三角分别统计，
+避免把 masked overflow 解释成输出错误。
+
+\begin{lstlisting}
+python challenge/r20_algebra_probe.py \
+  --output results/r20_algebra/algebra.json
+\end{lstlisting}
+
+\subsection{B300 job 25537：11 个性能边界与计时输入对拍}
+
+本次使用另一张 B300，GPU UUID 为
+\begin{lstlisting}
+GPU-0c223cf1-4325-822f-1e38-43ae57897edd
+\end{lstlisting}
+而 R19 主结果的 UUID 为
+\begin{lstlisting}
+GPU-3924bd78-8b2f-8e85-3f20-8b0687d0bb0a
+\end{lstlisting}
+这是相同软件工具链与相同 binary 在另一张物理卡上的验证。
+baseline SHA 与 R19 保持一致：
+\begin{lstlisting}
+aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704
+\end{lstlisting}
+候选 SHA 与上一节长测试相同。运行状态文件记录正常完成时间
+\code{2026-09-11T01:09:20+00:00}。
+
+\code{r20\_probe.py} 使用相同输入生成器，ABBA 四个独立 Python 进程加载两份
+extension。每个 case 在计时外计算全部输入、output、final state 的 SHA-256，
+检查结果有限；\code{r20\_summarize.py} 同时校验四次输入与输出一致、形状和计时参数
+一致、两份 binary 身份稳定，以及原始样本计算出的 median 等于归档值。
+TP8 的 $T=8192,H=12$ 在实际 benchmark seed 上额外与 native reference 对拍，
+output 与 final state 均逐位相等，mismatch count 和 max absolute error 均为 0。
+
+普通 case 的 warmup/iters/repeats 为 30/100/5；两项 $T\ge131072$ 为 3/10/3。
+每个 variant 用两次 run median 的 median 汇总，不把两次 run 当作设备总体的独立样本。
+新增结果如下；全部为 BF16 state-in/out，单位 ms。
+
+\begin{center}\small
+\begin{tabular}{@{}rrlrrr@{}}\toprule
+$T$&$H$&组织&baseline&candidate&延迟降低\\\midrule
+16&96&fixed&0.030744&0.030800&$-0.182\%$\\
+64&96&fixed&0.041424&0.041408&0.039\%\\
+256&96&fixed&0.082640&0.080320&2.807\%\\
+1024&96&fixed&0.250528&0.236272&5.690\%\\
+8192&96&fixed&1.772000&1.663152&6.143\%\\
+32768&96&fixed&7.011552&6.535144&6.795\%\\
+8192&12&fixed&1.359912&1.251688&7.958\%\\
+8192&64&fixed&1.624088&1.503864&7.403\%\\
+8192&96&mixed varlen&1.486872&1.482408&0.300\%\\
+131072&1&fixed&20.377424&18.350752&9.946\%\\
+1048576&1&fixed&161.825382&146.553009&9.438\%\\\bottomrule
+\end{tabular}
+\end{center}
+
+mixed varlen 为 $[1300,547,2048,963,271,3063]$。主形状从 R19 的 5.854\%
+复现为 6.143\%，TP8 从 8.827\% 复现为 7.958\%，支持前述正收益。
+一至四个 chunk 及 mixed varlen 则接近持平；报告据此明确适用范围。
+long pytest 的秒数不是这里的百万 token API 延迟。
+原始数据和日志见 \code{results/r20\_25537/}。
+
+\subsection{独立 FP32 token 参考与仅状态保存误差}
+
+同一 job 用 \path{r20_precision.py} 实际导入固定
+\path{fla_kda_ref/naive.py} 的 \path{naive_recurrent_kda}。
+参考文件 SHA 为
+\begin{lstlisting}
+60a32285d4b67068ff633b48bbe8ab31028066d24f00d27e12199a88fc73f016
+\end{lstlisting}
+q/k 用 FP32 归一化，$g=-5\sigma(g_{\rm raw})$，$\beta=\sigma(\beta_{\rm raw})$；
+$A_{\log}=0$, dt bias=0，$H=1,D=128$，seed=20260911，随机 BF16 初始状态幅度约 0.1。
+向 vendor 传入 FP32 v，因而输出保留 FP32，而不是在比较前已舍入成 BF16。
+kernel 的 state 从 $[V,K]$ 转置成参考的 $[K,V]$ 后比较。
+此外复制同一个 token 更新，仅在每 16 token 计算 output 后把 state 舍入到 BF16；
+其不舍入版本先在每类 gate 的 $T=256$ 上与 vendor 逐位对拍通过。
+这是隔离跨 chunk 状态保存的受控诊断，不是模拟整个生产混合精度 kernel。
+
+\begin{center}\small
+\begin{tabular}{@{}lrrrrr@{}}\toprule
+gate&$T$&kernel O&kernel S&仅边界 BF16 O&仅边界 BF16 S\\\midrule
+weak&256&0.748\%&0.685\%&0.310\%&0.396\%\\
+weak&1024&0.803\%&0.734\%&0.413\%&0.465\%\\
+weak&8192&0.828\%&0.735\%&0.436\%&0.443\%\\
+random&256&0.569\%&0.415\%&0.0084\%&0.168\%\\
+random&1024&0.577\%&0.407\%&0.0086\%&0.166\%\\
+random&8192&0.574\%&0.487\%&0.0084\%&0.164\%\\
+strong&256&0.531\%&0.422\%&0.00030\%&0.173\%\\
+strong&1024&0.526\%&0.379\%&0.00028\%&0.168\%\\
+strong&8192&0.521\%&0.537\%&0.00028\%&0.165\%\\\bottomrule
+\end{tabular}
+\end{center}
+表中为 relative $L_2$ error。全部输出有限，完整 max/mean/p99 absolute error
+见 \code{precision.json}。weak/strong 的 raw gate 分别恒为 $-8/+8$，random 为
+标准正态。弱门控中状态保存对后续 output 的影响更大；但 kernel 总误差还包含归一化、
+近似 sigmoid、BF16 operand 和 FP16 inverse，不能全归因于 state。
+本实验没有训练分布、多 seed 或百万 token 的弱门控高精度保证。
+
+\subsection{复现入口与基础检查}
+\begin{lstlisting}
+sbatch challenge/r20_long.sbatch ROOT CAND PYTHON
+sbatch challenge/r20_bench.sbatch \
+  ROOT BASE CAND PYTHON CHALLENGE FLA_NAIVE_PY
+python challenge/r20_summarize.py \
+  results/r20_25537/0_baseline.json \
+  results/r20_25537/1_candidate.json \
+  results/r20_25537/2_candidate.json \
+  results/r20_25537/3_baseline.json --output /tmp/r20-summary.json
+\end{lstlisting}
+本地已从四份 raw JSON 重新汇总，通过输入/输出/binary/样本一致性检查。
+新增 Python 入口通过语法编译，Slurm 脚本通过 Bash 语法检查。
+集群 \code{sacct} 的 accounting database 连接被拒绝，故不编造其状态输出；
+完成证据为 pytest XML、进程退出状态与 benchmark 脚本末尾才生成的完成文件。
+
+\subsection{同形状 BF16 MMA 对照：job 25541 失败与 25542 成功}
+
+新增 \code{r20\_mma\_compare.cu} 复用已固定、保留 BSD 许可证的
+\code{tcgen05\_sm103\_gemm.cu}，另实现 128-thread SM80 BF16 GEMM。
+两条路径的 tile 都为 $128\times128\times16$，输出 FP32；分别发射 1/12/96 CTA，
+不同 CTA 读取不同 A、共用 B。CPU 数据是可精确表示的有限二进制分数，
+每条实现共比较 1,785,856 个元素且 mismatch 为 0。该输入用于隔离布局与算术正确性，
+不能替代生产 kernel 随机输入和状态回归。
+
+job 25541 编译成功，首个 tile 的 CPU 对拍通过，但 CUDA Graph 捕获失败：
+\begin{lstlisting}
+cudaErrorStreamCaptureUnsupported:
+operation not permitted when stream is capturing
+\end{lstlisting}
+原因是教程的 \code{CUTE\_CHECK\_LAST} 调试宏在每次发射后调用 device synchronize。
+修正为保留 \code{cudaGetLastError} 检查，并把显式 synchronize 放在 capture 之外；
+同时断言每个 graph 恰有 100 个 node，防止默认 stream 不匹配导致空 graph。
+编译传入 \code{--default-stream per-thread}。
+原失败日志保留在 \code{results/r20\_25541/}，不计入性能结论。
+
+job 25542 通过全部对拍及 graph node 检查。每 slot 预热 5 个 graph，
+计时 20 个 graph，每个 graph 100 次 GEMM；ABBA 原始每 GEMM 微秒值为：
+\begin{center}\small
+\begin{tabular}{@{}rll@{}}\toprule
+CTA&SM80 两个 slot&tcgen05 两个 slot\\\midrule
+1&4.748672,\ 4.741152&22.474577,\ 22.475264\\
+12&4.758704,\ 4.761392&22.384111,\ 22.384352\\
+96&4.838272,\ 4.835344&22.984592,\ 22.986143\\\bottomrule
+\end{tabular}
+\end{center}
+
+tcgen05/SM80 的延迟比分别为 4.737、4.703、4.752。
+结论仅针对所测完整 GEMM probe：SM80 使用 39 registers/thread，
+实际 BF16 tcgen05 使用 150 registers/thread，两者均无 spill；
+旧教程被重命名而未执行的 F16 main 另实例化了 spill 的 kernel，不应混入实测资源表。
+tcgen05 每次独立调用分配/释放完整 TMEM，尚未做跨 chunk 复用或优化 recurrence，
+故这不是“SM100 专版不可能加速”的证明。
+完整 SASS 与可执行文件留在远程对应 job 目录；仓库归档相关 kernel 的指令摘要、
+binary SHA、build/run 日志与源码 SHA。
+\begin{lstlisting}
+sbatch challenge/r20_mma.sbatch ROOT CUTLASS PYTHON
+\end{lstlisting}
+
+\paragraph{release 构建控制：job 25543。}
+SASS 审阅发现未定义 NDEBUG 的 CuTe 代码包含大量调试断言路径。
+为使主报告采用 release 对照，追加 \code{-DNDEBUG}，相同 CPU 对拍和
+100-node 检查仍由显式代码执行，不受 NDEBUG 影响。
+job 25543 再次全部通过，其 ABBA 原始微秒值为：
+\begin{center}\small
+\begin{tabular}{@{}rll@{}}\toprule
+CTA&SM80 两个 slot&tcgen05 两个 slot\\\midrule
+1&4.467568,\ 4.465600&15.171744,\ 15.172752\\
+12&4.467920,\ 4.467792&15.337440,\ 15.335616\\
+96&4.719872,\ 4.721600&15.878224,\ 15.875536\\\bottomrule
+\end{tabular}
+\end{center}
+主报告用这组 release 数据，延迟比分别为 3.397、3.433、3.363；
+job 25542 的 4.7 倍仅保留作调试配置控制，不用作正式结论。
+两组均是独立 GEMM，不能外推最优 SM100 recurrence 性能。
+release SM80/tcgen05 使用 40/106 registers/thread，均无 spill；
+SASS 摘要分别包含 32 条 \code{HMMA.16816.F32.BF16} 和 2 条 \code{UTCHMMA}。
+这是静态指令计数；不能当作每次运行的动态指令数。
+
+\paragraph{数学与范围探针结果。}
+job 25542 与 25543 均成功执行修正数学探针，18 组全部通过。
+三条 float64 分块路径的最大 output/state absolute error 为
+$3.33\times10^{-16}/3.55\times10^{-15}$；
+未修改 vendor FP32 token 参考相对 float64 为
+$1.11\times10^{-7}/2.14\times10^{-6}$。
+seed=0、normal gate、64 个 chunk 的范围扫描中，C16/32/64 原正 factor
+为零比例为 0/15.180206\%/56.978035\%，逆 factor 为 inf 比例为
+0/14.089966\%/56.274986\%。
+正确 common shift 后最大 log2 幅度为 51.406/100.435/197.214；
+C32 无 zero/inf，C64 正 factor 仍有 6.886292\% zero，逆 factor 仍有 6.341743\% inf。
+按真实阶段模拟 factor、FP32 dot、FP16 store 与 mask，normal seed0 下 C32/C64
+因果区域非有限元素数从 78/990 降为 0/121。
+这支持 C32 的后续设计，但单一偏移不能普适修复 C64。
+所有统计、参数和模型限制见相应 \code{algebra.json}；没有产生完整大 CHUNK GPU
+性能结果。

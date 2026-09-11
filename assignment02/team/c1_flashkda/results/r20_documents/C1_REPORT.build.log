@@ -1,0 +1,714 @@
+Rc files read:
+  /home/huang/.config/latexmk/latexmkrc
+Latexmk: This is Latexmk, John Collins, 15 June 2025. Version 4.87.
+Latexmk: applying rule 'xelatex'...
+Rule 'xelatex':  Reasons for rerun
+Changed files or newly in use/created:
+  C1_REPORT.tex
+Category 'changed_user':
+  C1_REPORT.tex
+
+------------
+Run number 1 of rule 'xelatex'
+------------
+------------
+Running 'xelatex -synctex=1 -no-pdf -interaction=nonstopmode -halt-on-error -recorder  "C1_REPORT.tex"'
+------------
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025/nixos.org) (preloaded format=xelatex)
+ restricted \write18 enabled.
+entering extended mode
+(./C1_REPORT.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexart.cls
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctexbackend.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3kernel/expl3.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3backend/l3backend-xetex.def))
+Document Class: ctexart 2022/07/14 v2.5.10 Chinese adapter for class article (C
+TEX)
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexhook.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexpatch.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/fix-cm.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/ts1enc.def))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctexopts.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/article.cls
+Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/size11.clo))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/engine/ctex-engine-xetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/xelatex/xecjk/xeCJK.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3packages/xtemplate/xtemplate.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3packages/xparse/xparse.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec-xetex.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/fontenc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/xelatex/xecjk/xeCJK.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/zhnumber/zhnumber.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/zhnumber/zhnumber-utf8.cfg))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/scheme/ctex-scheme-chinese-article.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctex-name-utf8.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctex.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/geometry/geometry.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/keyval.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/iftex/ifvtex.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/iftex/iftex.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amstext.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsgen.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsbsy.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsopn.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/amssymb.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/amsfonts.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/booktabs/booktabs.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/tools/array.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/tools/tabularx.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/enumitem/enumitem.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/xcolor/xcolor.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-cfg/color.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-def/xetex.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/mathcolor.ltx))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/frontendlayer/tikz.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/basiclayer/pgf.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgfrcs.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfutil-common.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfutil-latex.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfrcs.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/pgf.revision.tex)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/basiclayer/pgfcore.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/graphicx.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/graphics.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/trig.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-cfg/graphics.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/systemlayer/pgfsys.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeys.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeyslibraryfiltered.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgf.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-xetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-dvipdfmx.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-common-pdf.def))))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsyssoftpath.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsysprotocol.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcore.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmath.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathutil.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathparser.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.basic.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.trigonometric.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.random.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.comparison.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.base.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.round.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.misc.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.integerarithmetics.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathcalc.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfloat.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfint.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepoints.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathconstruct.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathusage.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorescopes.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoregraphicstate.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoretransformations.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorequick.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreobjects.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathprocessing.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorearrows.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreshade.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreimage.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreexternal.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorelayers.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoretransparency.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepatterns.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorerdf.code.tex)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmoduleshapes.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmoduleplot.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/compatibility/pgfcomp-version-0-65.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/compatibility/pgfcomp-version-1-18.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgffor.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgfkeys.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeys.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/math/pgfmath.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmath.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgffor.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/tikz.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/libraries/pgflibraryplothandlers.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmodulematrix.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarytopaths.code.tex)
+))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/hyperref.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pdfescape/pdfescape.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/ltxcmds/ltxcmds.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/infwarerr/infwarerr.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hycolor/hycolor.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/nameref.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/refcount/refcount.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/gettitlestring/gettitlestring.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/kvoptions/kvoptions.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/etoolbox/etoolbox.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/stringenc/stringenc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/pd1enc.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/intcalc/intcalc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/puenc.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/url/url.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/bitset/bitset.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/bigintcalc/bigintcalc.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/hxetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/uniquecounter/uniquecounter.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/libraries/pgflibraryarrows.meta.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarypositioning.code.
+tex) (./C1_REPORT.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: xetex
+(./C1_REPORT.out) (./C1_REPORT.out)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/umsa.fd)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/umsb.fd)
+Underfull \hbox (badness 2376) in paragraph at lines 25--35
+\TU/NotoSerifCJKSC(0)/m/n/10 的 六 个 问 题，|  分 析 这 一 选 择 的 数 值 和 架 构 约 束，|  并 检 验 
+保 持 该 指 令 路 径 时 的 优 化 空 间。|  对
+[1]
+
+LaTeX Font Warning: Font shape `TU/NotoSerifCJKSC(0)/m/sl' undefined
+(Font)              using `TU/NotoSerifCJKSC(0)/m/n' instead on input line 131.
+
+
+[2] (./C1_R20_ALGEBRA_RESULTS.tex) [3] [4] [5] [6] (./C1_R20_MMA_RESULTS.tex
+[7]) [8]
+Underfull \hbox (badness 8189) in paragraph at lines 401--401
+[]|\TU/NotoSerifCJKSC(0)/m/n/10 跨 任 务 \TU/lmr/m/n/10 persis-
+
+Underfull \hbox (badness 10000) in paragraph at lines 401--401
+[]|\TU/lmr/m/n/10 2-CTA clus-
+[9]
+Underfull \hbox (badness 6725) in paragraph at lines 454--456
+[]\TU/lmr/m/n/10 NVIDIA. \TU/lmr/m/it/10 Nsight Compute Profiling Guide\TU/lmr/
+m/n/10 . [][]$[][][][][] [] [] [] [][][][] [] [][][][][][] [] [][][] [] [][][][
+][][][][][][][][][][][] []
+[10] (./C1_REPORT.aux)
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
+ )
+(see the transcript file for additional information)
+Output written on C1_REPORT.xdv (10 pages, 216040 bytes).
+SyncTeX written on C1_REPORT.synctex.gz.
+Transcript written on C1_REPORT.log.
+Latexmk: Getting log file 'C1_REPORT.log'
+Latexmk: Examining 'C1_REPORT.fls'
+Latexmk: Examining 'C1_REPORT.log'
+Latexmk: Log file says output to 'C1_REPORT.xdv'
+Latexmk: Using bibtex to make bibliography file(s).
+Latexmk: applying rule 'xelatex'...
+Rule 'xelatex':  Reasons for rerun
+Changed files or newly in use/created:
+  C1_EXPERIMENT_RECORD.aux
+  C1_EXPERIMENT_RECORD.out
+
+------------
+Run number 2 of rule 'xelatex'
+------------
+------------
+Running 'xelatex -synctex=1 -no-pdf -interaction=nonstopmode -halt-on-error -recorder  "C1_REPORT.tex"'
+------------
+This is XeTeX, Version 3.141592653-2.6-0.999997 (TeX Live 2025/nixos.org) (preloaded format=xelatex)
+ restricted \write18 enabled.
+entering extended mode
+(./C1_REPORT.tex
+LaTeX2e <2025-11-01>
+L3 programming layer <2026-01-19>
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexart.cls
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctexbackend.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3kernel/expl3.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3backend/l3backend-xetex.def))
+Document Class: ctexart 2022/07/14 v2.5.10 Chinese adapter for class article (C
+TEX)
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexhook.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/ctexpatch.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/fix-cm.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/ts1enc.def))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctexopts.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/article.cls
+Document Class: article 2025/01/22 v1.4n Standard LaTeX document class
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/size11.clo))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/engine/ctex-engine-xetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/xelatex/xecjk/xeCJK.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3packages/xtemplate/xtemplate.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/l3packages/xparse/xparse.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec-xetex.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/base/fontenc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/fontspec/fontspec.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/xelatex/xecjk/xeCJK.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/zhnumber/zhnumber.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/zhnumber/zhnumber-utf8.cfg))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/scheme/ctex-scheme-chinese-article.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctex-name-utf8.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/ctex/config/ctex.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/geometry/geometry.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/keyval.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/iftex/ifvtex.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/iftex/iftex.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amstext.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsgen.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsbsy.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsmath/amsopn.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/amssymb.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/amsfonts.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/booktabs/booktabs.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/tools/array.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/tools/tabularx.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/enumitem/enumitem.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/xcolor/xcolor.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-cfg/color.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-def/xetex.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/mathcolor.ltx))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/frontendlayer/tikz.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/basiclayer/pgf.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgfrcs.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfutil-common.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfutil-latex.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfrcs.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/pgf.revision.tex)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/basiclayer/pgfcore.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/graphicx.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/graphics.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics/trig.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/graphics-cfg/graphics.cfg)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/systemlayer/pgfsys.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeys.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeyslibraryfiltered.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgf.cfg)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-xetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-dvipdfmx.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsys-common-pdf.def))))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsyssoftpath.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/systemlayer/pgfsysprotocol.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcore.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmath.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathutil.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathparser.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.basic.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.trigonometric.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.random.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.comparison.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.base.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.round.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.misc.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfunctions.integerarithmetics.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathcalc.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmathfloat.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfint.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepoints.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathconstruct.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathusage.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorescopes.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoregraphicstate.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoretransformations.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorequick.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreobjects.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepathprocessing.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorearrows.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreshade.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreimage.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoreexternal.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorelayers.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcoretransparency.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorepatterns.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/basiclayer/pgfcorerdf.code.tex)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmoduleshapes.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmoduleplot.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/compatibility/pgfcomp-version-0-65.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/compatibility/pgfcomp-version-1-18.sty))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgffor.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/utilities/pgfkeys.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgfkeys.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/pgf/math/pgfmath.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/math/pgfmath.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/utilities/pgffor.code.tex))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/tikz.code.tex
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/libraries/pgflibraryplothandlers.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/modules/pgfmodulematrix.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarytopaths.code.tex)
+))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/hyperref.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pdfescape/pdfescape.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/ltxcmds/ltxcmds.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/infwarerr/infwarerr.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hycolor/hycolor.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/nameref.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/refcount/refcount.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/gettitlestring/gettitlestring.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/kvoptions/kvoptions.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/etoolbox/etoolbox.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/stringenc/stringenc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/pd1enc.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/intcalc/intcalc.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/puenc.def)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/url/url.sty)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/bitset/bitset.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/bigintcalc/bigintcalc.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/hyperref/hxetex.def
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/uniquecounter/uniquecounter.sty)))
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/libraries/pgflibraryarrows.meta.code.tex)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzlibrarypositioning.code.
+tex) (./C1_REPORT.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: xetex
+(./C1_REPORT.out) (./C1_REPORT.out)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/umsa.fd)
+(/nix/store/ff99w9369azw8z5njzjs1zs86s18znyq-texlive-2025-r78234-final-env-texm
+fdist/tex/latex/amsfonts/umsb.fd)
+Underfull \hbox (badness 2376) in paragraph at lines 25--35
+\TU/NotoSerifCJKSC(0)/m/n/10 的 六 个 问 题，|  分 析 这 一 选 择 的 数 值 和 架 构 约 束，|  并 检 验 
+保 持 该 指 令 路 径 时 的 优 化 空 间。|  对
+[1]
+
+LaTeX Font Warning: Font shape `TU/NotoSerifCJKSC(0)/m/sl' undefined
+(Font)              using `TU/NotoSerifCJKSC(0)/m/n' instead on input line 131.
+
+
+[2] (./C1_R20_ALGEBRA_RESULTS.tex) [3] [4] [5] [6] (./C1_R20_MMA_RESULTS.tex
+[7]) [8]
+Underfull \hbox (badness 8189) in paragraph at lines 401--401
+[]|\TU/NotoSerifCJKSC(0)/m/n/10 跨 任 务 \TU/lmr/m/n/10 persis-
+
+Underfull \hbox (badness 10000) in paragraph at lines 401--401
+[]|\TU/lmr/m/n/10 2-CTA clus-
+[9]
+Underfull \hbox (badness 6725) in paragraph at lines 454--456
+[]\TU/lmr/m/n/10 NVIDIA. \TU/lmr/m/it/10 Nsight Compute Profiling Guide\TU/lmr/
+m/n/10 . [][]$[][][][][] [] [] [] [][][][] [] [][][][][][] [] [][][] [] [][][][
+][][][][][][][][][][][] []
+[10] (./C1_REPORT.aux)
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
+ )
+(see the transcript file for additional information)
+Output written on C1_REPORT.xdv (10 pages, 216040 bytes).
+SyncTeX written on C1_REPORT.synctex.gz.
+Transcript written on C1_REPORT.log.
+Latexmk: Getting log file 'C1_REPORT.log'
+Latexmk: Examining 'C1_REPORT.fls'
+Latexmk: Examining 'C1_REPORT.log'
+Latexmk: Log file says output to 'C1_REPORT.xdv'
+Latexmk: Using bibtex to make bibliography file(s).
+Latexmk: applying rule 'xdvipdfmx'...
+Rule 'xdvipdfmx':  Reasons for rerun
+Changed files or newly in use/created:
+  C1_REPORT.xdv
+Category 'changed_source_rules':
+  xelatex
+
+------------
+Run number 1 of rule 'xdvipdfmx'
+------------
+------------
+Running 'xdvipdfmx -E -o "C1_REPORT.pdf"  "C1_REPORT.xdv"'
+------------
+C1_REPORT.xdv -> C1_REPORT.pdf
+[1][2][3][4][5][6][7][8][9][10]
+288889 bytes written
+Latexmk: All targets (C1_REPORT.xdv C1_REPORT.pdf) are up-to-date
+

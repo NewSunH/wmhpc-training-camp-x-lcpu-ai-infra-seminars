@@ -1,0 +1,2813 @@
+{
+  "device": "cpu",
+  "torch": "2.13.0+cu130",
+  "arithmetic": "float64",
+  "vendored_reference_sha256": "60a32285d4b67068ff633b48bbe8ab31028066d24f00d27e12199a88fc73f016",
+  "cases": [
+    {
+      "chunk": 16,
+      "profile": "normal",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.405495172850102e-08,
+          "mean_abs": 5.331510473380318e-10,
+          "relative_l2": 2.2451570608307613e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.411684312310982e-08,
+          "mean_abs": 1.7635922486648168e-09,
+          "relative_l2": 5.288212345943311e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.469446951953614e-17,
+          "mean_abs": 1.8785446407771792e-18,
+          "relative_l2": 7.296805956723715e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.615581860848644e-18,
+          "relative_l2": 2.760964665086803e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -75.79016059324249,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 2.0221980001565798e-18,
+          "relative_l2": 7.583356876352248e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608819555943447e-18,
+          "relative_l2": 2.7565866764029287e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -75.79016059324249,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": -40.39284850704741,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 2.0222831148399904e-18,
+          "relative_l2": 7.583993851535177e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608819555943447e-18,
+          "relative_l2": 2.7565866764029287e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -75.79016059324249,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": -40.39284850704741,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 80,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 80,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "normal",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.405495172850102e-08,
+          "mean_abs": 5.331510473380318e-10,
+          "relative_l2": 2.2451570608307613e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.411684312310982e-08,
+          "mean_abs": 1.7635922486648168e-09,
+          "relative_l2": 5.288212345943311e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.377642775528102e-17,
+          "mean_abs": 2.647558658454728e-18,
+          "relative_l2": 1.0517551142802104e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.615585169571094e-18,
+          "relative_l2": 2.760964391638342e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -143.5635163575363,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.421010862427522e-17,
+          "mean_abs": 3.0324332885311938e-18,
+          "relative_l2": 1.1473276366847265e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608796394886295e-18,
+          "relative_l2": 2.756585827815303e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -143.5635163575363,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": -74.27952638919432,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.421010862427522e-17,
+          "mean_abs": 3.0324359556382636e-18,
+          "relative_l2": 1.1473376973886237e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608796394886295e-18,
+          "relative_l2": 2.756585827815303e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -143.5635163575363,
+        "prefix_natural_log_max": -0.004606340284582778,
+        "shift_natural_log_min": -74.27952638919432,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.170166015625,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.15869140625,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 78,
+          "fp32_dot_nonfinite_masked": 338,
+          "fp16_store_nonfinite_causal": 78,
+          "fp16_store_nonfinite_masked": 462,
+          "after_mask_and_beta_nonfinite": 78
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 54,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 414,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "normal",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.405495172850102e-08,
+          "mean_abs": 5.331510473380318e-10,
+          "relative_l2": 2.2451570608307613e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.411684312310982e-08,
+          "mean_abs": 1.7635922486648168e-09,
+          "relative_l2": 5.288212345943311e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.2967057982926633e-16,
+          "mean_abs": 5.046845965211401e-18,
+          "relative_l2": 2.1293420724258645e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.615585169571094e-18,
+          "relative_l2": 2.760964391638342e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -278.8044767694014,
+        "prefix_natural_log_max": -0.006131871158339819,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.3097162243624894e-16,
+          "mean_abs": 5.680302012532678e-18,
+          "relative_l2": 2.257021788570407e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608796394886295e-18,
+          "relative_l2": 2.756585827815303e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -278.8044767694014,
+        "prefix_natural_log_max": -0.006131871158339819,
+        "shift_natural_log_min": -141.8720711529994,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.3097162243624894e-16,
+          "mean_abs": 5.680255136867852e-18,
+          "relative_l2": 2.2570106908233813e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.6020852139652106e-16,
+          "mean_abs": 7.608796394886295e-18,
+          "relative_l2": 2.756585827815303e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.673617379884035e-19,
+        "prefix_natural_log_min": -278.8044767694014,
+        "prefix_natural_log_max": -0.006131871158339819,
+        "shift_natural_log_min": -141.8720711529994,
+        "shift_natural_log_max": -5.66624414384212
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.5765380859375,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.5687255859375,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 990,
+          "fp32_dot_nonfinite_masked": 1890,
+          "fp16_store_nonfinite_causal": 990,
+          "fp16_store_nonfinite_masked": 2014,
+          "after_mask_and_beta_nonfinite": 990
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0782470703125,
+            "inf_fraction": 0.075439453125,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0810546875,
+            "inf_fraction": 0.073486328125,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 121,
+          "fp32_dot_nonfinite_masked": 1412,
+          "fp16_store_nonfinite_causal": 121,
+          "fp16_store_nonfinite_masked": 1935,
+          "after_mask_and_beta_nonfinite": 121
+        }
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "weak",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1087649798291466e-07,
+          "mean_abs": 1.0677816018563963e-08,
+          "relative_l2": 3.804915300333159e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.1441254323129044e-06,
+          "mean_abs": 1.5754795528264475e-07,
+          "relative_l2": 3.845874853421203e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.3592239273284576e-16,
+          "mean_abs": 2.5052676169905874e-17,
+          "relative_l2": 8.823823667754522e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.552713678800501e-15,
+          "mean_abs": 3.491329915797031e-16,
+          "relative_l2": 8.266750281156086e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.7755575615628914e-17,
+        "prefix_natural_log_min": -0.0009970083706385192,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.220446049250313e-16,
+          "mean_abs": 2.511999395235603e-17,
+          "relative_l2": 8.854016204005741e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.460676852227082e-16,
+          "relative_l2": 8.197863062314824e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.7755575615628914e-17,
+        "prefix_natural_log_min": -0.0009970083706385192,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": -0.0004985295624166614,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.220446049250313e-16,
+          "mean_abs": 2.5201383190417106e-17,
+          "relative_l2": 8.875992864654972e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.552713678800501e-15,
+          "mean_abs": 3.4766455408651937e-16,
+          "relative_l2": 8.251790903364042e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.7755575615628914e-17,
+        "prefix_natural_log_min": -0.0009970083706385192,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": -0.0004985295624166614,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "weak",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1087649798291466e-07,
+          "mean_abs": 1.0677816018563963e-08,
+          "relative_l2": 3.804915300333159e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.1441254323129044e-06,
+          "mean_abs": 1.5754795528264475e-07,
+          "relative_l2": 3.845874853421203e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.220446049250313e-16,
+          "mean_abs": 2.55762149961049e-17,
+          "relative_l2": 9.007104990901384e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.5496017459267376e-16,
+          "relative_l2": 8.360864162360534e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0009979433489280458,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.942890293094024e-16,
+          "mean_abs": 2.5547928765620115e-17,
+          "relative_l2": 9.006190435665551e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.53855987736589e-16,
+          "relative_l2": 8.349235545651969e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0009979433489280458,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": -0.0004989957683522472,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.0816681711721685e-16,
+          "mean_abs": 2.5509028858033903e-17,
+          "relative_l2": 8.99750506324922e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.5477575963818874e-16,
+          "relative_l2": 8.373487494770371e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0009979433489280458,
+        "prefix_natural_log_max": -2.7126736335584558e-12,
+        "shift_natural_log_min": -0.0004989957683522472,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "weak",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1087649798291466e-07,
+          "mean_abs": 1.0677816018563963e-08,
+          "relative_l2": 3.804915300333159e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.1441254323129044e-06,
+          "mean_abs": 1.5754795528264475e-07,
+          "relative_l2": 3.845874853421203e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.220446049250313e-16,
+          "mean_abs": 2.641332207794521e-17,
+          "relative_l2": 9.269647766818942e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.660404110990543e-16,
+          "relative_l2": 8.552564112133024e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0010021173581557248,
+        "prefix_natural_log_max": -3.6121618212487707e-12,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.7755575615628914e-16,
+          "mean_abs": 2.6506950720673903e-17,
+          "relative_l2": 9.32435569176024e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.6570028766606227e-16,
+          "relative_l2": 8.551993249425008e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0010021173581557248,
+        "prefix_natural_log_max": -3.6121618212487707e-12,
+        "shift_natural_log_min": -0.0005010827729660867,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.498001805406602e-16,
+          "mean_abs": 2.6471364668460943e-17,
+          "relative_l2": 9.275156283802717e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.6578252927128475e-16,
+          "relative_l2": 8.573945111259284e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.0010021173581557248,
+        "prefix_natural_log_max": -3.6121618212487707e-12,
+        "shift_natural_log_min": -0.0005010827729660867,
+        "shift_natural_log_max": -9.160626068405989e-09
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "strong",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.3473727107925502e-08,
+          "mean_abs": 4.727794214490774e-10,
+          "relative_l2": 2.3130697969045345e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.8868736900999892e-08,
+          "mean_abs": 1.4365313246080332e-09,
+          "relative_l2": 4.7320310386686167e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.5102810375396984e-17,
+          "mean_abs": 1.2010479606366373e-18,
+          "relative_l2": 5.848685068223672e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99999999699405,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.5102810375396984e-17,
+          "mean_abs": 1.2370326973926884e-18,
+          "relative_l2": 5.994077215506612e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99999999699405,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": -42.49999999849571,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.5102810375396984e-17,
+          "mean_abs": 1.2370326973926884e-18,
+          "relative_l2": 5.994077215506612e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99999999699405,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": -42.49999999849571,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 89,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 89,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "strong",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.3473727107925502e-08,
+          "mean_abs": 4.727794214490774e-10,
+          "relative_l2": 2.3130697969045345e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.8868736900999892e-08,
+          "mean_abs": 1.4365313246080332e-09,
+          "relative_l2": 4.7320310386686167e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.469446951953614e-17,
+          "mean_abs": 1.1749030741086945e-18,
+          "relative_l2": 5.520585232622464e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99999998108436,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.1927662584194772e-18,
+          "relative_l2": 5.571254309588743e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99999998108436,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": -82.49999999054086,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.1927662584194772e-18,
+          "relative_l2": 5.571254309588743e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99999998108436,
+        "prefix_natural_log_max": -4.999996809750343,
+        "shift_natural_log_min": -82.49999999054086,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.46875,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.46875,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 105,
+          "fp32_dot_nonfinite_masked": 375,
+          "fp16_store_nonfinite_causal": 105,
+          "fp16_store_nonfinite_masked": 478,
+          "after_mask_and_beta_nonfinite": 105
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 91,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 431,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "strong",
+      "seed": 0,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.3473727107925502e-08,
+          "mean_abs": 4.727794214490774e-10,
+          "relative_l2": 2.3130697969045345e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.8868736900999892e-08,
+          "mean_abs": 1.4365313246080332e-09,
+          "relative_l2": 4.7320310386686167e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.226828186714528e-18,
+          "relative_l2": 5.851935503520157e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99999993321904,
+        "prefix_natural_log_max": -4.999997604175025,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.8163916471489756e-17,
+          "mean_abs": 1.2400324203133638e-18,
+          "relative_l2": 5.850079146758525e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99999993321904,
+        "prefix_natural_log_max": -4.999997604175025,
+        "shift_natural_log_min": -162.49999996659156,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.8163916471489756e-17,
+          "mean_abs": 1.2400324203133638e-18,
+          "relative_l2": 5.850079146758525e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.1102230246251565e-16,
+          "mean_abs": 3.561504476860706e-18,
+          "relative_l2": 1.3141296201553072e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99999993321904,
+        "prefix_natural_log_max": -4.999997604175025,
+        "shift_natural_log_min": -162.49999996659156,
+        "shift_natural_log_max": -19.999994841002728
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.734375,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.734375,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 1081,
+          "fp32_dot_nonfinite_masked": 1927,
+          "fp16_store_nonfinite_causal": 1081,
+          "fp16_store_nonfinite_masked": 2030,
+          "after_mask_and_beta_nonfinite": 1081
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.234375,
+            "inf_fraction": 0.21875,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.234375,
+            "inf_fraction": 0.21875,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 182,
+          "fp32_dot_nonfinite_masked": 1567,
+          "fp16_store_nonfinite_causal": 182,
+          "fp16_store_nonfinite_masked": 1971,
+          "after_mask_and_beta_nonfinite": 182
+        }
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "normal",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.795799228071493e-08,
+          "mean_abs": 4.917670888161588e-10,
+          "relative_l2": 2.2763977086993262e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1291562341273504e-08,
+          "mean_abs": 1.2218830221401993e-09,
+          "relative_l2": 5.3793893767723744e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.8163916471489756e-17,
+          "mean_abs": 1.5682951141028065e-18,
+          "relative_l2": 6.529523330412736e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.738355071439084e-18,
+          "relative_l2": 1.6888613668809095e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -70.53616603405469,
+        "prefix_natural_log_max": -0.06540693053019928,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.8163916471489756e-17,
+          "mean_abs": 1.6199157872014319e-18,
+          "relative_l2": 6.5952796052026e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.737465852280589e-18,
+          "relative_l2": 1.688954012291693e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -70.53616603405469,
+        "prefix_natural_log_max": -0.06540693053019928,
+        "shift_natural_log_min": -37.71901800344655,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.8163916471489756e-17,
+          "mean_abs": 1.6199004890778597e-18,
+          "relative_l2": 6.595261989362451e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.737465852280589e-18,
+          "relative_l2": 1.688954012291693e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -70.53616603405469,
+        "prefix_natural_log_max": -0.06540693053019928,
+        "shift_natural_log_min": -37.71901800344655,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 78,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 78,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "normal",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.795799228071493e-08,
+          "mean_abs": 4.917670888161588e-10,
+          "relative_l2": 2.2763977086993262e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1291562341273504e-08,
+          "mean_abs": 1.2218830221401993e-09,
+          "relative_l2": 5.3793893767723744e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.209238430557093e-17,
+          "mean_abs": 1.929202788992982e-18,
+          "relative_l2": 7.82339097818963e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.738368306328885e-18,
+          "relative_l2": 1.6888615119474685e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -132.18334601004625,
+        "prefix_natural_log_max": -0.131236270257258,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.122502256758253e-17,
+          "mean_abs": 2.0767510334410395e-18,
+          "relative_l2": 8.234265549647555e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.73747908717039e-18,
+          "relative_l2": 1.6889541573502946e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.734723475976807e-18,
+        "prefix_natural_log_min": -132.18334601004625,
+        "prefix_natural_log_max": -0.131236270257258,
+        "shift_natural_log_min": -68.55032017999417,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.122502256758253e-17,
+          "mean_abs": 2.076733319824272e-18,
+          "relative_l2": 8.234238434170418e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.73747908717039e-18,
+          "relative_l2": 1.6889541573502946e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.734723475976807e-18,
+        "prefix_natural_log_min": -132.18334601004625,
+        "prefix_natural_log_max": -0.131236270257258,
+        "shift_natural_log_min": -68.55032017999417,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.1484375,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.139892578125,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 55,
+          "fp32_dot_nonfinite_masked": 297,
+          "fp16_store_nonfinite_causal": 55,
+          "fp16_store_nonfinite_masked": 449,
+          "after_mask_and_beta_nonfinite": 55
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 42,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 403,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "normal",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.795799228071493e-08,
+          "mean_abs": 4.917670888161588e-10,
+          "relative_l2": 2.2763977086993262e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1291562341273504e-08,
+          "mean_abs": 1.2218830221401993e-09,
+          "relative_l2": 5.3793893767723744e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.375108774214766e-17,
+          "mean_abs": 2.930845431178854e-18,
+          "relative_l2": 1.2576533859640908e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.738355071439084e-18,
+          "relative_l2": 1.6888613668809095e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -263.63476052942605,
+        "prefix_natural_log_max": -0.21377915793807142,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.375108774214766e-17,
+          "mean_abs": 3.342438756099038e-18,
+          "relative_l2": 1.394651779727057e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.737465852280589e-18,
+          "relative_l2": 1.688954012291693e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -263.63476052942605,
+        "prefix_natural_log_max": -0.21377915793807142,
+        "shift_natural_log_min": -134.18369298740453,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.375108774214766e-17,
+          "mean_abs": 3.3424274837974585e-18,
+          "relative_l2": 1.3946418141372861e-15
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 6.938893903907228e-17,
+          "mean_abs": 3.737465852280589e-18,
+          "relative_l2": 1.688954012291693e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.168404344971009e-19,
+        "prefix_natural_log_min": -263.63476052942605,
+        "prefix_natural_log_max": -0.21377915793807142,
+        "shift_natural_log_min": -134.18369298740453,
+        "shift_natural_log_max": -5.805677703166472
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.5693359375,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.562744140625,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 903,
+          "fp32_dot_nonfinite_masked": 1849,
+          "fp16_store_nonfinite_causal": 903,
+          "fp16_store_nonfinite_masked": 2001,
+          "after_mask_and_beta_nonfinite": 903
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0672607421875,
+            "inf_fraction": 0.06298828125,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0677490234375,
+            "inf_fraction": 0.0618896484375,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 100,
+          "fp32_dot_nonfinite_masked": 1335,
+          "fp16_store_nonfinite_causal": 100,
+          "fp16_store_nonfinite_masked": 1911,
+          "after_mask_and_beta_nonfinite": 100
+        }
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "weak",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 9.887407942388293e-08,
+          "mean_abs": 1.0904208396276891e-08,
+          "relative_l2": 3.950097836069857e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.944057913760844e-06,
+          "mean_abs": 1.6861031964712107e-07,
+          "relative_l2": 4.081717148209544e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.7755575615628914e-16,
+          "mean_abs": 2.4198516209332427e-17,
+          "relative_l2": 8.783253219608536e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.4736983294298917e-16,
+          "relative_l2": 8.24244493849009e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 2.7755575615628914e-17,
+        "prefix_natural_log_min": -0.027658548097565468,
+        "prefix_natural_log_max": -1.947436850070533e-07,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.7755575615628914e-16,
+          "mean_abs": 2.4269799426445348e-17,
+          "relative_l2": 8.820505769337315e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.552713678800501e-15,
+          "mean_abs": 3.4667877317203787e-16,
+          "relative_l2": 8.243678258634593e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 4.163336342344337e-17,
+        "prefix_natural_log_min": -0.027658548097565468,
+        "prefix_natural_log_max": -1.947436850070533e-07,
+        "shift_natural_log_min": -0.013846324763619466,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-16,
+          "mean_abs": 2.4221046923405413e-17,
+          "relative_l2": 8.809996405152424e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.459759475840536e-16,
+          "relative_l2": 8.223426969931501e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 4.163336342344337e-17,
+        "prefix_natural_log_min": -0.027658548097565468,
+        "prefix_natural_log_max": -1.947436850070533e-07,
+        "shift_natural_log_min": -0.013846324763619466,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "weak",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 9.887407942388293e-08,
+          "mean_abs": 1.0904208396276891e-08,
+          "relative_l2": 3.950097836069857e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.944057913760844e-06,
+          "mean_abs": 1.6861031964712107e-07,
+          "relative_l2": 4.081717148209544e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.498001805406602e-16,
+          "mean_abs": 2.452021964476537e-17,
+          "relative_l2": 8.86093305283942e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.886579864025407e-15,
+          "mean_abs": 3.46066169827826e-16,
+          "relative_l2": 8.206551460342095e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.326672684688674e-17,
+        "prefix_natural_log_min": -0.03020142689434572,
+        "prefix_natural_log_max": -3.960282087021804e-07,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.498001805406602e-16,
+          "mean_abs": 2.4355840501818935e-17,
+          "relative_l2": 8.8365867689514e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.552713678800501e-15,
+          "mean_abs": 3.4734309846559146e-16,
+          "relative_l2": 8.227843293571423e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.326672684688674e-17,
+        "prefix_natural_log_min": -0.03020142689434572,
+        "prefix_natural_log_max": -3.960282087021804e-07,
+        "shift_natural_log_min": -0.01510514906234144,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-16,
+          "mean_abs": 2.449434286874319e-17,
+          "relative_l2": 8.863481807979396e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.1086244689504383e-15,
+          "mean_abs": 3.4669578000543196e-16,
+          "relative_l2": 8.234633313566205e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 8.326672684688674e-17,
+        "prefix_natural_log_min": -0.03020142689434572,
+        "prefix_natural_log_max": -3.960282087021804e-07,
+        "shift_natural_log_min": -0.01510514906234144,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "weak",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 9.887407942388293e-08,
+          "mean_abs": 1.0904208396276891e-08,
+          "relative_l2": 3.950097836069857e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.944057913760844e-06,
+          "mean_abs": 1.6861031964712107e-07,
+          "relative_l2": 4.081717148209544e-07
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.7755575615628914e-16,
+          "mean_abs": 2.523924775723236e-17,
+          "relative_l2": 9.136938484425884e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.6206378993504235e-16,
+          "relative_l2": 8.549425206126083e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.03680435615377647,
+        "prefix_natural_log_max": -6.562412832109094e-07,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.498001805406602e-16,
+          "mean_abs": 2.524312140315369e-17,
+          "relative_l2": 9.129680475608923e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.552713678800501e-15,
+          "mean_abs": 3.6357354675418434e-16,
+          "relative_l2": 8.575424531903884e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.03680435615377647,
+        "prefix_natural_log_max": -6.562412832109094e-07,
+        "shift_natural_log_min": -0.018526552044370852,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.498001805406602e-16,
+          "mean_abs": 2.5310094977823474e-17,
+          "relative_l2": 9.141931824151312e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 3.3306690738754696e-15,
+          "mean_abs": 3.6024650721648785e-16,
+          "relative_l2": 8.545077951680748e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 1.1102230246251565e-16,
+        "prefix_natural_log_min": -0.03680435615377647,
+        "prefix_natural_log_max": -6.562412832109094e-07,
+        "shift_natural_log_min": -0.018526552044370852,
+        "shift_natural_log_max": -2.836267586600032e-05
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 0,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "strong",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 17,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.17491916560436e-08,
+          "mean_abs": 4.4541564999975614e-10,
+          "relative_l2": 2.2214817158182097e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.646136912365371e-08,
+          "mean_abs": 1.2011299038319203e-09,
+          "relative_l2": 5.40888498079905e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.1961808316815353e-18,
+          "relative_l2": 5.701754959256269e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99996643329413,
+        "prefix_natural_log_max": -4.998891789441878,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.85722573273506e-17,
+          "mean_abs": 1.173145992698747e-18,
+          "relative_l2": 5.683055094077942e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99996643329413,
+        "prefix_natural_log_max": -4.998891789441878,
+        "shift_natural_log_min": -42.49998306958486,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.85722573273506e-17,
+          "mean_abs": 1.173145992698747e-18,
+          "relative_l2": 5.683055094077942e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -79.99996643329413,
+        "prefix_natural_log_max": -4.998891789441878,
+        "shift_natural_log_min": -42.49998306958486,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 90,
+          "after_mask_and_beta_nonfinite": 0
+        },
+        "scaled": {
+          "kd": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 2048,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 0,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 90,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "strong",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 9,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.17491916560436e-08,
+          "mean_abs": 4.4541564999975614e-10,
+          "relative_l2": 2.2214817158182097e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.646136912365371e-08,
+          "mean_abs": 1.2011299038319203e-09,
+          "relative_l2": 5.40888498079905e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.189927250077128e-18,
+          "relative_l2": 5.614969001756385e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99986926288878,
+        "prefix_natural_log_max": -4.9994549850004475,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.1501203928594881e-18,
+          "relative_l2": 5.493379243975346e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99986926288878,
+        "prefix_natural_log_max": -4.9994549850004475,
+        "shift_natural_log_min": -82.49993183661525,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.1501203928594881e-18,
+          "relative_l2": 5.493379243975346e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -159.99986926288878,
+        "prefix_natural_log_max": -4.9994549850004475,
+        "shift_natural_log_min": -82.49993183661525,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.468994140625,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.46875,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 105,
+          "fp32_dot_nonfinite_masked": 375,
+          "fp16_store_nonfinite_causal": 105,
+          "fp16_store_nonfinite_masked": 479,
+          "after_mask_and_beta_nonfinite": 105
+        },
+        "scaled": {
+          "kd": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 4096,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 0,
+          "fp32_dot_nonfinite_masked": 91,
+          "fp16_store_nonfinite_causal": 0,
+          "fp16_store_nonfinite_masked": 432,
+          "after_mask_and_beta_nonfinite": 0
+        }
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "strong",
+      "seed": 1,
+      "tokens": 263,
+      "dim": 128,
+      "chunks": 5,
+      "tail_tokens": 7,
+      "vendored_native_fp32_vs_float64": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 1.17491916560436e-08,
+          "mean_abs": 4.4541564999975614e-10,
+          "relative_l2": 2.2214817158182097e-07
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 2.646136912365371e-08,
+          "mean_abs": 1.2011299038319203e-09,
+          "relative_l2": 5.40888498079905e-08
+        }
+      },
+      "raw_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.163336342344337e-17,
+          "mean_abs": 1.2397056232548151e-18,
+          "relative_l2": 5.768114322341161e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99971300647604,
+        "prefix_natural_log_max": -4.9996710803819315,
+        "shift_natural_log_min": 0.0,
+        "shift_natural_log_max": 0.0
+      },
+      "scaled_triangular": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.85722573273506e-17,
+          "mean_abs": 1.1845275687341617e-18,
+          "relative_l2": 5.61303432554883e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99971300647604,
+        "prefix_natural_log_max": -4.9996710803819315,
+        "shift_natural_log_min": -162.49985608820865,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "scaled_neumann": {
+        "output": {
+          "nonfinite_elements": 0,
+          "max_abs": 4.85722573273506e-17,
+          "mean_abs": 1.1845275687341617e-18,
+          "relative_l2": 5.61303432554883e-16
+        },
+        "state": {
+          "nonfinite_elements": 0,
+          "max_abs": 5.551115123125783e-17,
+          "mean_abs": 2.326700137805306e-18,
+          "relative_l2": 1.191441399436182e-16
+        },
+        "max_neumann_vs_triangular_inverse_abs": 6.617444900424222e-24,
+        "prefix_natural_log_min": -319.99971300647604,
+        "prefix_natural_log_max": -4.9996710803819315,
+        "shift_natural_log_min": -162.49985608820865,
+        "shift_natural_log_max": -19.998053135558976
+      },
+      "factor_storage_model": {
+        "raw": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.7344970703125,
+            "inf_fraction": 0.0,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.0,
+            "inf_fraction": 0.734375,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 1081,
+          "fp32_dot_nonfinite_masked": 1927,
+          "fp16_store_nonfinite_causal": 1081,
+          "fp16_store_nonfinite_masked": 2031,
+          "after_mask_and_beta_nonfinite": 1081
+        },
+        "scaled": {
+          "kd": {
+            "elements": 8192,
+            "zero_fraction": 0.234375,
+            "inf_fraction": 0.21875,
+            "nan_fraction": 0.0
+          },
+          "ki": {
+            "elements": 8192,
+            "zero_fraction": 0.234375,
+            "inf_fraction": 0.21875,
+            "nan_fraction": 0.0
+          },
+          "fp32_dot_nonfinite_causal": 182,
+          "fp32_dot_nonfinite_masked": 1567,
+          "fp16_store_nonfinite_causal": 182,
+          "fp16_store_nonfinite_masked": 1969,
+          "after_mask_and_beta_nonfinite": 182
+        }
+      }
+    }
+  ],
+  "range_cases": [
+    {
+      "chunk": 16,
+      "profile": "normal",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -110.01170096440158,
+      "prefix_log2_max": -0.004961137496349065,
+      "shifted_log2_min": -51.40631910202334,
+      "shifted_log2_max": 51.40631910202334,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "normal",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -207.27883733193534,
+      "prefix_log2_max": -0.007682084975252201,
+      "shifted_log2_min": -100.43466765073231,
+      "shifted_log2_max": 100.43466765073231,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.15180206298828125,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.140899658203125,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "normal",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -401.47113845925946,
+      "prefix_log2_max": -0.005527016369797018,
+      "shifted_log2_min": -197.21399181026297,
+      "shifted_log2_max": 197.21399181026294,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.5697803497314453,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.5627498626708984,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0688629150390625,
+        "inf_fraction": 0.06334877014160156,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.06883621215820312,
+        "inf_fraction": 0.06341743469238281,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "weak",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.26191109139198654,
+      "prefix_log2_max": -2.642596511601651e-12,
+      "shifted_log2_min": -0.13079410393052635,
+      "shifted_log2_max": 0.13079410393052632,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "weak",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.6365275335027041,
+      "prefix_log2_max": -3.0199154411253583e-12,
+      "shifted_log2_min": -0.31787844119668135,
+      "shifted_log2_max": 0.31787844119668135,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "weak",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.622079337220959,
+      "prefix_log2_max": -2.5903371007034763e-12,
+      "shifted_log2_min": -0.3093202727049556,
+      "shifted_log2_max": 0.3093202727049556,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "strong",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -115.41560326439831,
+      "prefix_log2_max": -7.1853260026164705,
+      "shifted_log2_min": -54.101064030872564,
+      "shifted_log2_max": 54.10106403087258,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "strong",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -230.83120651851542,
+      "prefix_log2_max": -7.175732306386322,
+      "shifted_log2_min": -111.80886565703693,
+      "shifted_log2_max": 111.80886565703695,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.46875,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.46875,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "strong",
+      "seed": 0,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -461.66241301368154,
+      "prefix_log2_max": -7.178560139521206,
+      "shifted_log2_min": -227.2244689046579,
+      "shifted_log2_max": 227.22446890465793,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.734375,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.734375,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.234375,
+        "inf_fraction": 0.21875,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.234375,
+        "inf_fraction": 0.21875,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "normal",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -112.48420929634122,
+      "prefix_log2_max": -0.004693620793682095,
+      "shifted_log2_min": -52.66552670473628,
+      "shifted_log2_max": 52.665526704736266,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "normal",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -208.8784511447645,
+      "prefix_log2_max": -0.00109534072935744,
+      "shifted_log2_min": -100.89905987099198,
+      "shifted_log2_max": 100.899059870992,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.15422821044921875,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.14299392700195312,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "normal",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -394.7805725394236,
+      "prefix_log2_max": -0.003283042462969639,
+      "shifted_log2_min": -194.05798618611072,
+      "shifted_log2_max": 194.05798618611072,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.5692367553710938,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.5622520446777344,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0691070556640625,
+        "inf_fraction": 0.06400489807128906,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.06928634643554688,
+        "inf_fraction": 0.06377410888671875,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "weak",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.36891339959265357,
+      "prefix_log2_max": -9.390214683319716e-12,
+      "shifted_log2_min": -0.18189307698715507,
+      "shifted_log2_max": 0.181893076987155,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "weak",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.6478664692262933,
+      "prefix_log2_max": -9.119846153061908e-13,
+      "shifted_log2_min": -0.32273545578668916,
+      "shifted_log2_max": 0.3227354557866892,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "weak",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -0.7732981479676159,
+      "prefix_log2_max": -5.476258280375887e-12,
+      "shifted_log2_min": -0.3857279717948816,
+      "shifted_log2_max": 0.3857279717948817,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 16,
+      "profile": "strong",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -115.41560326975505,
+      "prefix_log2_max": -7.183882444772288,
+      "shifted_log2_min": -54.10106403266854,
+      "shifted_log2_max": 54.10106403266854,
+      "raw_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 131072,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 32,
+      "profile": "strong",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -230.8312064999161,
+      "prefix_log2_max": -7.189672620044077,
+      "shifted_log2_min": -111.80886565087347,
+      "shifted_log2_max": 111.80886565087347,
+      "raw_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.46875,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.46875,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 262144,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      }
+    },
+    {
+      "chunk": 64,
+      "profile": "strong",
+      "seed": 1,
+      "tiles": 64,
+      "dim": 128,
+      "prefix_log2_min": -461.6624130052004,
+      "prefix_log2_max": -7.19118241724442,
+      "shifted_log2_min": -227.22446890062906,
+      "shifted_log2_max": 227.22446890062906,
+      "raw_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.734375,
+        "inf_fraction": 0.0,
+        "nan_fraction": 0.0
+      },
+      "raw_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.0,
+        "inf_fraction": 0.734375,
+        "nan_fraction": 0.0
+      },
+      "scaled_positive": {
+        "elements": 524288,
+        "zero_fraction": 0.234375,
+        "inf_fraction": 0.21875,
+        "nan_fraction": 0.0
+      },
+      "scaled_negative": {
+        "elements": 524288,
+        "zero_fraction": 0.234375,
+        "inf_fraction": 0.21875,
+        "nan_fraction": 0.0
+      }
+    }
+  ],
+  "acceptance": {
+    "float64_output_and_state_max_abs": 1e-11,
+    "float64_output_and_state_relative_l2": 1e-10,
+    "passed_cases": 18
+  },
+  "limits": [
+    "No GPU timing or tensor-core instruction emulation.",
+    "Float64 tests establish algebraic agreement on the tested inputs, not BF16 accuracy.",
+    "The unchanged vendored recurrence converts inputs to FP32; the float64 oracle transcribes its formula.",
+    "Range simulation models FP32 flush-to-zero and BF16 conversion, not approximate exp2 instruction error.",
+    "Upper-triangular nonfinites overwritten by the causal mask do not by themselves imply output failure.",
+    "This samples fixed per-head A_log and per-key dt_bias over time, not trained model inputs."
+  ]
+}

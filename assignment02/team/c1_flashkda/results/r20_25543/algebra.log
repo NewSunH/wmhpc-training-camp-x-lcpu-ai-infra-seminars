@@ -1,0 +1,19 @@
+PASS seed=0 gate=normal C=16 T=263 output=4.163e-17 state=2.602e-16
+PASS seed=0 gate=normal C=32 T=263 output=5.421e-17 state=2.602e-16
+PASS seed=0 gate=normal C=64 T=263 output=1.310e-16 state=2.602e-16
+PASS seed=0 gate=weak C=16 T=263 output=2.220e-16 state=3.553e-15
+PASS seed=0 gate=weak C=32 T=263 output=2.082e-16 state=3.109e-15
+PASS seed=0 gate=weak C=64 T=263 output=2.498e-16 state=3.109e-15
+PASS seed=0 gate=strong C=16 T=263 output=4.510e-17 state=1.110e-16
+PASS seed=0 gate=strong C=32 T=263 output=4.163e-17 state=1.110e-16
+PASS seed=0 gate=strong C=64 T=263 output=3.816e-17 state=1.110e-16
+PASS seed=1 gate=normal C=16 T=263 output=3.816e-17 state=6.939e-17
+PASS seed=1 gate=normal C=32 T=263 output=3.123e-17 state=6.939e-17
+PASS seed=1 gate=normal C=64 T=263 output=6.375e-17 state=6.939e-17
+PASS seed=1 gate=weak C=16 T=263 output=3.331e-16 state=3.109e-15
+PASS seed=1 gate=weak C=32 T=263 output=3.331e-16 state=3.109e-15
+PASS seed=1 gate=weak C=64 T=263 output=2.498e-16 state=3.331e-15
+PASS seed=1 gate=strong C=16 T=263 output=4.857e-17 state=5.551e-17
+PASS seed=1 gate=strong C=32 T=263 output=4.163e-17 state=5.551e-17
+PASS seed=1 gate=strong C=64 T=263 output=4.857e-17 state=5.551e-17
+Wrote /home/lcpu/10578328/c1_r20_run_20260911a/mma_25543/algebra.json: 18 algebra cases, 18 range cases.

@@ -1,0 +1,29 @@
+我们以 float64 逐 token 转写，对照未缩放 triangular solve、
+正确缩放的 triangular solve 和有限 Neumann 三条分块路径。
+在 \(C=16,32,64\)、弱/随机/强门控、两个 seed、
+\(D=128,T=263\)（含尾块）的 18 组中，三条路径均通过：
+最大的 output/state absolute error 分别为
+\(3.33\times10^{-16}\) 和 \(3.55\times10^{-15}\)。
+未经修改的 vendored FP32 token 函数也实际执行，与 float64 转写的最大
+output/state 差异为 \(1.11\times10^{-7}\) 和 \(2.14\times10^{-6}\)。
+这验证所测输入上的代数等价性，不证明 BF16 kernel 精度或运行时间。
+
+\begin{table}[htbp]\centering\small
+\begin{tabular}{rrrrrr}\toprule
+\(C\)&原 factor 为零&逆 factor 为 inf&偏移后最大 \(|\log_2|\)&偏移后为零&偏移后逆 factor 为 inf\\\midrule
+16&0&0&51.406&0&0\\
+32&15.180\%&14.090\%&100.435&0&0\\
+64&56.978\%&56.275\%&197.214&6.886\%&6.342\%\\\bottomrule
+\end{tabular}
+\caption{修正后的范围诊断：seed=0，随机 gate，64 个独立 chunk，D128。
+\(A_{\log}\) 在 head 内、dt bias 在 key 内跨时间固定。
+模型计算 FP32 FTZ 后写入 BF16 的范围，不模拟 exp2 近似指令误差。}
+\label{tab:range}
+\end{table}
+
+表 \ref{tab:range} 显示共同偏移可修复这一 C32 样本的 factor 范围，
+C64 则仍有非有限值；单一偏移不是普适解。
+另按真实阶段建模 BF16 factor、FP32 dot、FP16 store 与 causal mask：
+seed=0 的随机门控下，C32/C64 原表示在保留的下三角分别有 78/990 个非有限值，
+正确偏移后为 0/121。该结果支持进一步设计 C32，
+但 C64 需要更细分的尺度或其它表示；它没有实现完整大 CHUNK GPU kernel。

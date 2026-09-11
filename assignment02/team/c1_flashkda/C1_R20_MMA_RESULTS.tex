@@ -1,0 +1,27 @@
+我们补充相同 \(128\times128\times16\) BF16\(\times\)BF16\(\to\)FP32 的独立 GEMM 对照。
+SM80 probe 与基于固定 CUTLASS 教程的 1-CTA tcgen05 probe 均使用 128 threads，
+读取 A/B 并写完整 FP32 结果；CTA 数为 1、12、96。
+每个 CTA 处理不同 A tile，共用 B，因而该实验是并行 tile 微基准，并非独立 head 的完整 recurrence。
+两条路径在所有 case 中与 CPU reference 精确相等，共各比较 1,785,856 个元素。
+
+\begin{table}[htbp]\centering\small
+\begin{tabular}{rrrr}\toprule
+CTA 数&SM80 (\(\mu\)s)&tcgen05 (\(\mu\)s)&tcgen05 / SM80 延迟比\\\midrule
+1&4.466584&15.172248&3.397\\
+12&4.467856&15.336528&3.433\\
+96&4.720736&15.876880&3.363\\\bottomrule
+\end{tabular}
+\caption{相同数学形状的独立 GEMM，ABBA 两个 slot 均值再平均。
+每 slot 预热 5 个 graph，计时 20 个 graph；每 graph 含 100 个 kernel node。
+数值是每次 GEMM 的平均时间，不能与 public API 中位数混比。}
+\label{tab:mma}
+\end{table}
+
+构建使用 \code{-O3 -DNDEBUG}，关闭 CuTe 调试断言。
+为避免旧教程 host helper 的同步检查与提交空隙，采用 CUDA Graph 并断言捕获 100 个 node。
+在这个完整加载、MMA、写回的 probe 中，tcgen05 路径明显更慢。
+SM80/tcgen05 分别使用 40/106 registers/thread，两条实测 kernel 均无 spill；
+tcgen05 教程还在每次调用分配和释放完整容量的 TMEM。
+因此表 \ref{tab:mma} 支持“当前教程式局部替换没有收益”，而非“tcgen05 本身慢”：
+它没有复用跨 chunk 的 TMEM，也不是经过充分调优的 SM100 KDA 实现。
+先前 2-CTA 相对 1-CTA 的正向局部结果同样不能代替完整 recurrence 验证。
