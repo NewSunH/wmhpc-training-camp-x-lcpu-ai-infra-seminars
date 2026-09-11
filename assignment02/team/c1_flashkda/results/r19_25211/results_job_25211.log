@@ -1,0 +1,10 @@
+name, uuid, driver_version
+NVIDIA B300 SXM6 AC, GPU-3924bd78-8b2f-8e85-3f20-8b0687d0bb0a, 580.126.09
+2.13.0+cu130 13.0
+{"state_elements":16384,"c_mismatches":0,"b_packed_mismatches":0}
+built and exact: baseline
+built and exact: reg8
+paired benchmark complete: 0 baseline
+paired benchmark complete: 1 reg8
+paired benchmark complete: 2 reg8
+paired benchmark complete: 3 baseline

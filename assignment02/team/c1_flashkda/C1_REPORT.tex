@@ -76,7 +76,11 @@ barrier/TMA 固定开销和较低的可用并行度。多种 output、V-split、
 swizzled-TMA 和共享存储重构均保持了若干 exactness；workspace 融合、DSM
 和 PDL 也分别通过了局部正确性门槛，但没有稳定超过官方 baseline；R12 的
 两个完整 output 候选与 baseline 持平，差距约 0.2\%，R15--R18 也未形成
-端到端收益。因此
+端到端收益。R19 的 full 8-block register-state cache 通过 layout map 和七个
+end-to-end exactness case，但在独立 CUDA 13.0/cu130 的 B300 ABBA 对照中慢
+14.92\%。随后加入循环外 preload、value-major fragment、warp sync 和 early
+output，最终组合通过 576 项 exactness；题面 H96 BF16 state 的独立 ABBA 从
+1.746072 ms 降到 1.643856 ms，延迟降低 5.854\%（1.06218 倍速度）。因此
 建议保留 SM80 通用路径，只有在准备同步重做 K2 分块、状态布局和同步协议时，
 才值得建立 SM100 专版。
 \end{abstract}
@@ -89,9 +93,10 @@ swizzled-TMA 和共享存储重构均保持了若干 exactness；workspace 融�
 题目要求回答的不是“能否在 B300 上编译”，而是为什么官方 kernel 在
 Blackwell 上仍保留 SM80 风格 MMA，以及是否存在足以改变这一决策的优化空间。
 本文将 ``baseline'' 定义为关闭所有 challenge 开关、同一源码和同一 B300
-节点上测得的官方非 split 路径。当前固定形状的 BF16 state baseline 约为
-\(1.03\,\mathrm{ms}\)；正式 benchmark 使用 CUDA event，warmup=30、
-iters=200、repeats=5，profiler 时间只用于结构解释。
+节点上测得的官方非 split 路径。早期 cu129 harness 的固定形状 BF16-state
+baseline 约为 \(1.03\,\mathrm{ms}\)；R19 的隔离 cu130 harness 则以其同一
+job 的 1.743280 ms control 为准，两者不横向比较。正式 benchmark 使用 CUDA
+event，warmup/iters/repeats 均在对应轮次记录；profiler 时间只用于结构解释。
 
 \begin{decision}{最终判断}
 \begin{enumerate}
@@ -99,9 +104,10 @@ iters=200、repeats=5，profiler 时间只用于结构解释。
   B300 上运行”误写成“已经使用 tcgen05”。
   \item CHUNK=16 是算法、数值和指令形状的共同折中。只增大常量而不加入
   rescale 会先破坏 bf16 的指数范围，而不是先得到理想吞吐。
-  \item 仅改变 MMA atom、减少 shared-memory 容量或改写 store 地址，均不足以
-  形成稳定的端到端收益；真正可能超过 10\% 的方向是 K1/K2 workspace fusion
-  或 CHUNK+rescale，但二者都属于结构性重写。
+  \item 局部替换 atom、value-split 和多种输出改写没有稳定收益，但 R19 的
+  完整 state cache、循环外 preload、value-major 和同步改写组合有正结果：
+  H96 BF16 延迟降低 5.854\%，H96 no-state 降低 12.971\%。保持 CHUNK=16
+  和 SM80 MMA 仍有优化空间；不能把早期负结果外推为不可能改进。
   \item 对当前 v1，保留 SM80 通用实现是工程上更稳妥的选择。SM100 v2 只有在
   有明确的 tile/layout/synchronization redesign 和目标 workload 时才值得投入。
 \end{enumerate}
@@ -309,7 +315,7 @@ absolute error、relative error 和首次出现误差的 chunk。这样才能区
 
 \section{挑战实验：哪些方向接近 baseline}
 
-下表汇总 R3--R12 的完整 output 或结构性候选。不同轮次的绝对时间受节点
+下表汇总 R3--R19 的完整 output 或结构性候选。不同轮次的绝对时间受节点
 频率、benchmark harness 和源码构建影响，因此表中优先报告相对同源 control
 的比例。
 
@@ -335,14 +341,17 @@ R15 & 仅消除 $g_{\mathrm{total}}$ workspace & 10 个 case exact & $T=8192,H=9
 R16 & CHUNK=32 scaled-state reference & float64 两 chunk allclose & 数学等价；运行时缩放 microbench 0.7853 ms，未接入完整 kernel\\
 R17 & DSM/cluster V-split primitive & 20/20 exact & DSM 比 duplicate load 慢 13.8--23.1\%，不接入\\
 R18 & PDL 调度重叠 & standalone 5/5 exact；FlashKDA smoke 通过 & 合成 probe 快 8.1--47.0\%，但 FlashKDA fixed H96 仅 -0.034\%\\
+R19 & full 8-block register-state cache & map 0 mismatch；7/7 output/state exact & cu130 ABBA：2.003360 vs 1.743280 ms，延迟增加 14.92\%\\
+R19 & early-output only & 7/7 output/state exact & cu130 ABBA：1.735928 vs 1.756552 ms，延迟降低 1.174\%；后续组合复测\\
+R19 & reg5 / value-major cache controls & reg5/vm8/vm5 均 7/7 exact；VM map 0 mismatch & 延迟分别增加 2.153\% / 4.095\% / 10.393\%\\
+R19 & preload + value-major + warp sync + early output & 576 tests exact；value-major arithmetic probe 0 mismatch & job 25286：H96 BF16 state 降低 5.854\%，六个 case 测得略快或明显快；小于 1\% 的两项不主张稳健加速\\
 \bottomrule
 \caption{主要挑战路线的结果分类。}
 \end{longtable}
 
 严格按“完整 H=96、同源 baseline、差距不超过 5\%”统计，出现过三个近似
 思路：R8 fused add、R12 stage=3、R12 fused TMA。其中 R12 的两个结果经过
-同源复测，属于可重复的持平；R15--R18 没有改变这一结论，没有一个候选
-形成可确认的超过 baseline 的收益。
+同源复测，属于可重复的持平；R15--R19 中 job 25286 的最终组合已完成独立长轮次与多 shape 复测；题面 H=96 BF16 state 降低 5.854\%，但 FP32 state 与多序列 varlen 的收益较小。
 
 \section{两个高潜力结构方向的评估}
 
@@ -442,12 +451,15 @@ predicate 和 epilogue；任何一个环节出错都会表现为跨 chunk 的 si
         R17 中 DSM 反而慢 13.8--23.1\% 的实测相符，说明硬件特性本身不是
         性能保证。
   \item
-        \href{https://github.com/Int21-AI/KDA-B200}{KDA-B200} 和
-        \href{https://github.com/inclusionAI/cuLA}{cuLA} 的公开实现都采用
-        Blackwell-native tcgen05/TMEM、shape specialization、persistent 或
-        reusable-workspace 路由。cuLA 的 SM100 fwd\_o 还把 chunk=64、
-        256 threads 和 persistent/non-persistent stage 作为显式设计参数。
-        这些结果证明 SM100 专版有潜力，但 B200/FLA/CUPTI 口径不能直接替代
+        \href{https://github.com/Int21-AI/KDA-B200}{KDA-B200} 与
+        \href{https://github.com/inclusionAI/cuLA}{cuLA} 展示了不同路线：cuLA
+        的 SM100 路径使用 Blackwell-native tcgen05/TMEM；KDA-B200 的当前
+        recurrence 仍含 SM80-style \code{mma\_sync}，并以 shape specialization
+        和部分 register-state cache 优化局部数据驻留。后者以
+        \code{movmatrix} 转换 cached fragment direction，正是 R19 要独立验证
+        而非照抄的设计空间。cuLA 的 SM100 fwd\_o 还把 chunk=64、256 threads
+        和 persistent/non-persistent stage 作为显式设计参数。这些资料说明
+        state layout 与 dispatch 同样关键，但 B200/FLA/CUPTI 口径不能直接替代
         本题 B300 baseline。
   \item
         \href{https://github.com/flashinfer-ai/flashinfer/pull/4765}{FlashInfer
@@ -467,20 +479,25 @@ predicate 和 epilogue；任何一个环节出错都会表现为跨 chunk 的 si
 \code{launch\_bounds(...,8)} 的 token/head 并行 prepare，使用 shared-memory
 union 和六类 workspace；K2 是 CHUNK=16、输入 stage=3、输出 stage=2、
 192-thread、四 MMA warp 加两个 load/store warp 的 recurrence。H=96 时
-动态 shared memory 约 200,704 B，NCU 观测到约 66--74 registers/thread、
+Dynamic Shared Memory Per Block 为 98,432 B（约 96.125 KiB；不是每 SM 的
+200,704 B configuration），NCU 观测到约 66--74 registers/thread、
 约 9.37\% achieved occupancy。SM103 上仍使用 SM90 TMA descriptor 和 HMMA，
 是为了保持经过验证的 16\(\times\)16 Neumann/state/layout ABI，而不是遗漏
-了 Blackwell 编译目标。因而最可信的性能路径不是继续改一个 store 或把
-共享内存削小，而是独立重做 tcgen05/TMEM 的 tile、状态布局、流水线和
-shape dispatch。
+了 Blackwell 编译目标。R19 表明，在保持该数值算法的同时改变状态驻留和
+同步组织也能取得正收益；tcgen05/TMEM 仍是需要独立验证的另一条路线。
 
 \begin{decision}{基于公开资料的工程判断}
-R15--R18 证明低风险的局部改动已经接近其收益上限：workspace 重算会退化，
-DSM primitive 会退化，PDL 合成 probe 的收益也无法传递到当前 K1/K2 临界
-路径。若目标是继续追求超过 baseline 5--10\%，下一步应建立独立的 SM103a
-Blackwell-native kernel，优先复用公开项目的 tcgen05/TMEM、persistent
-双路由和 reusable workspace 思路；若目标是完成 C1，当前 HMMA baseline
-加上这些负向证据已经足以回答“为什么官方没有直接换 tcgen05”。
+R15--R19 证明多数低风险的局部改动已经接近其收益上限：workspace 重算会退化，
+DSM primitive 会退化，PDL 合成 probe 的收益无法传递到当前 K1/K2 临界路径；
+R19 的直接 full cache 会慢化，但加入 preload、value-major、warp sync 和 early output
+后，在题面形状取得 5.854\% 延迟降低。这里的编译
+register 变化只与慢化相关，不能在 H=96 的 CTA 数下直接断言 occupancy 因果；
+job 25286 已将早提交与其它调度因素组合并完成独立复测；其题面形状延迟降低 5.854\%，但 FP32 state 与 varlen 差异小于 1\%。若继续追求更高收益，可在独立 SM103a
+kernel 中同时重做 tcgen05/TMEM 的 tile、persistent/reusable-workspace 路由，
+或先重排 state fragment direction 以降低 cache hit 的转换与寄存器成本；不能
+把 full-cache R19 的负结果外推为所有 partial-cache 设计均不可行。若目标是
+完成 C1，当前 HMMA baseline 加上这些正反证据已足以回答“为什么官方没有直接
+换 tcgen05”。
 \end{decision}
 
 \section{结论}
@@ -490,12 +507,17 @@ Blackwell-native kernel，优先复用公开项目的 tcgen05/TMEM、persistent
 最小 tile 破坏了现有 K2 的局部结构；同一 head 的 recurrence 限制了 CTA 并行；
 H=96 的实际瓶颈包含同步和状态依赖，不能简化为 DRAM 带宽。多轮 exactness
 实验进一步表明，减少 shared storage 或改写 output store 并不等于端到端
-加速。完整 output 候选已经能够稳定追平 baseline，但没有可复现的正收益。
+加速。R19 最终组合已经在 576 项 correctness tests 和六个 benchmark case 上通过；
+题面 H=96 BF16 state 的 CUDA-event 延迟从 1.746072 ms 降至 1.643856 ms，
+降低 5.854\%。收益依赖 state mode 与序列组织：FP32 state 为 0.775\%，
+8-sequence varlen 为 0.960\%。full register-state cache 单独使用仍慢约 14.92\%，
+说明缓存布局、初始化与同步组织需要共同测量；消融尚不能证明每一项都是必要条件。
 
 因此，官方停在 SM80 是一个有工程依据的决定，而不是尚未尝试 tcgen05 的遗漏。
-如果目标是继续追求超过 10\%，应优先做 K1/K2 workspace fusion 或 CHUNK+rescale
-这类结构性实验，并接受较高的实现和数值风险；如果目标是完成 C1，当前证据已足以
-支持“SM80 v1 保持、SM100 v2 暂缓”的结论。
+如果目标是继续追求超过 10\%，应重做 state layout/fragment direction，并结合
+K1/K2 workspace fusion、CHUNK+rescale 或独立 SM100 tile 设计，接受较高的实现和
+数值风险；如果目标是完成 C1，当前证据已足以支持“SM80 v1 保持、SM100 v2 暂缓”
+的结论。
 
 \section*{可复核材料}
 

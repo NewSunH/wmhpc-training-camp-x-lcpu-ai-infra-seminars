@@ -1,0 +1,54 @@
+{
+  "baseline": {
+    "Memory Throughput": {
+      "value": "38.60",
+      "unit": "%"
+    },
+    "Duration": {
+      "value": "1281504",
+      "unit": "ns"
+    },
+    "Compute (SM) Throughput": {
+      "value": "20.96",
+      "unit": "%"
+    },
+    "Registers Per Thread": {
+      "value": "73",
+      "unit": "register/thread"
+    },
+    "Dynamic Shared Memory Per Block": {
+      "value": "98432",
+      "unit": "byte/block"
+    },
+    "Achieved Occupancy": {
+      "value": "9.37",
+      "unit": "%"
+    }
+  },
+  "candidate": {
+    "Memory Throughput": {
+      "value": "24.20",
+      "unit": "%"
+    },
+    "Duration": {
+      "value": "1175168",
+      "unit": "ns"
+    },
+    "Compute (SM) Throughput": {
+      "value": "27.72",
+      "unit": "%"
+    },
+    "Registers Per Thread": {
+      "value": "154",
+      "unit": "register/thread"
+    },
+    "Dynamic Shared Memory Per Block": {
+      "value": "98432",
+      "unit": "byte/block"
+    },
+    "Achieved Occupancy": {
+      "value": "9.37",
+      "unit": "%"
+    }
+  }
+}

@@ -187,17 +187,19 @@ DRAM throughput：
 \small
 \begin{tabular}{l r r r r}
 \toprule
-variant & block & registers/thread & shared config (B) & achieved occupancy \\
+variant & block & registers/thread & dynamic smem/block (B) & achieved occupancy \\
 \midrule
-default & 192 & 66--74 & 200704 & 9.36--9.38\% \\
-pair-packed direct & 192 & 78--92 & 200704 & 9.37--9.38\% \\
+default & 192 & 66--74 & 98,432 & 9.36--9.38\% \\
+pair-packed direct & 192 & 78--92 & 98,432 & 9.37--9.38\% \\
 \bottomrule
 \end{tabular}
 \caption{NCU basic set 的 recurrence resource 结果；范围来自不同 state I/O 实例化。}
 \end{table}
 
-direct 版本的寄存器数不是下降，而是增加约 5--26 registers/thread；shared
-memory 配置完全没有变化，因为本轮没有删除 union 中预留的 output storage。
+direct 版本的寄存器数不是下降，而是增加约 5--26 registers/thread；NCU 的
+Dynamic Shared Memory Per Block 在两者均为 98,432 B，因为本轮没有删除 union
+中预留的 output storage。早期记录的 200,704 B 是 Shared Memory Configuration/
+SM，不可误作单个 CTA 的 dynamic shared-memory 数。
 两个版本的 occupancy 几乎相同。direct capture 的 DRAM throughput 约为
 11.3--11.9\%，default 约为 10.8--11.4\%，没有显示出“少一次 TMA 就显著
 降低内存压力”的证据，反而说明普通 global store 和地址计算增加了活动。

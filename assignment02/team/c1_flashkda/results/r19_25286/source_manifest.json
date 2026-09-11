@@ -1,0 +1,16 @@
+{
+  "verification_date": "2026-09-11",
+  "verification_method": "Post-run sha256sum in the isolated winning remote checkout, compared with local files; binary hash also matches 25281/25286 result records. Not a build-time source attestation.",
+  "source_sha256": {
+    "setup.py": "79c3966c75b0a9c4bf30d5d641d68d68d8de730b896c7f2fbed53f711fc143d1",
+    "csrc/flash_kda.cpp": "f736ab87c7c2e47fe416f8d04d62502a257a6ff32a0b23452c07e1bc65c87c04",
+    "csrc/fwd.h": "462afefb5c1bfe89428166cd81fc70954606049a41a4b67376025a2b2f91d7cc",
+    "csrc/smxx/fwd_launch.cu": "26b9b7dbdb60c4a0a97e068c460e75df5c717e428d8b27378e072a80df04b73b",
+    "csrc/smxx/fwd_kernel1.cuh": "83f8ad45c32169cfa4c3f985e8a99299243e27fd136b7a1c1ab6ec190a0647ac",
+    "csrc/smxx/fwd_kernel2.cuh": "af676dff78fbf8ba3c0a328349b3bcbc70863728cf3d07c0f8ebf82f2840317b",
+    "csrc/smxx/utils.cuh": "b75cfa3b1fa35cc5dd268c0a6157025df0cf06b94f7511900fe0213dfec1e316"
+  },
+  "cutlass_commit": "5c149f52a436782210263fb2f19b354443a61c6a",
+  "candidate_binary_sha256": "bab79adfb71f8515b814ff619a1044cf6c975554053fcc0d28f6a2a21c00ad1c",
+  "local_sources_equal_remote": true
+}

@@ -1,0 +1,237 @@
+{
+  "abba_slots": [
+    {
+      "H": 96,
+      "T": 8192,
+      "event_samples": 150,
+      "extension_sha256": "aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704",
+      "file": "pair_0_baseline.json",
+      "label": "baseline",
+      "nseq": 1,
+      "slot_mean_ms": 1.7437013363838196,
+      "slot_median_ms": 1.7433279752731323,
+      "state_mode": "bf16"
+    },
+    {
+      "H": 96,
+      "T": 8192,
+      "event_samples": 150,
+      "extension_sha256": "2dcb7e698ec830f88477af1cd3bc741b816d3f2551a4bb45d820970c13910fd2",
+      "file": "pair_1_reg8.json",
+      "label": "reg8",
+      "nseq": 1,
+      "slot_mean_ms": 2.003887995084127,
+      "slot_median_ms": 2.0033600330352783,
+      "state_mode": "bf16"
+    },
+    {
+      "H": 96,
+      "T": 8192,
+      "event_samples": 150,
+      "extension_sha256": "2dcb7e698ec830f88477af1cd3bc741b816d3f2551a4bb45d820970c13910fd2",
+      "file": "pair_2_reg8.json",
+      "label": "reg8",
+      "nseq": 1,
+      "slot_mean_ms": 2.003507630030314,
+      "slot_median_ms": 2.0033600330352783,
+      "state_mode": "bf16"
+    },
+    {
+      "H": 96,
+      "T": 8192,
+      "event_samples": 150,
+      "extension_sha256": "aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704",
+      "file": "pair_3_baseline.json",
+      "label": "baseline",
+      "nseq": 1,
+      "slot_mean_ms": 1.7441644843419393,
+      "slot_median_ms": 1.743232011795044,
+      "state_mode": "bf16"
+    }
+  ],
+  "cuda_version": "13.0",
+  "device": "NVIDIA B300 SXM6 AC",
+  "exactness": {
+    "baseline": {
+      "all_output_equal": true,
+      "all_present_states_equal": true,
+      "case_keys": [
+        [
+          16,
+          1,
+          1,
+          "bf16"
+        ],
+        [
+          17,
+          4,
+          1,
+          "bf16"
+        ],
+        [
+          64,
+          12,
+          1,
+          "bf16"
+        ],
+        [
+          97,
+          96,
+          1,
+          "bf16"
+        ],
+        [
+          17,
+          4,
+          1,
+          "fp32"
+        ],
+        [
+          64,
+          4,
+          1,
+          "none"
+        ],
+        [
+          64,
+          4,
+          2,
+          "bf16"
+        ]
+      ],
+      "cases": 7,
+      "extension_sha256": "aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704"
+    },
+    "reg8": {
+      "all_output_equal": true,
+      "all_present_states_equal": true,
+      "case_keys": [
+        [
+          16,
+          1,
+          1,
+          "bf16"
+        ],
+        [
+          17,
+          4,
+          1,
+          "bf16"
+        ],
+        [
+          64,
+          12,
+          1,
+          "bf16"
+        ],
+        [
+          97,
+          96,
+          1,
+          "bf16"
+        ],
+        [
+          17,
+          4,
+          1,
+          "fp32"
+        ],
+        [
+          64,
+          4,
+          1,
+          "none"
+        ],
+        [
+          64,
+          4,
+          2,
+          "bf16"
+        ]
+      ],
+      "cases": 7,
+      "extension_sha256": "2dcb7e698ec830f88477af1cd3bc741b816d3f2551a4bb45d820970c13910fd2"
+    }
+  },
+  "job_id": 25211,
+  "map": {
+    "b_packed_mismatches": 0,
+    "c_mismatches": 0,
+    "state_elements": 16384
+  },
+  "paired_h96_t8192_bf16": {
+    "baseline_slot_medians_ms": [
+      1.743232011795044,
+      1.7433279752731323
+    ],
+    "baseline_two_slot_median_ms": 1.7432799935340881,
+    "latency_increase_percent_reg8_over_base_minus_1": 14.919005579473165,
+    "order": [
+      "baseline",
+      "reg8",
+      "reg8",
+      "baseline"
+    ],
+    "reg8_slot_medians_ms": [
+      2.0033600330352783,
+      2.0033600330352783
+    ],
+    "reg8_two_slot_median_ms": 2.0033600330352783,
+    "samples_per_slot": 150,
+    "speedup_percent_base_over_reg8_minus_1": -12.982191678604293
+  },
+  "ptxas": {
+    "baseline": {
+      "all_functions_registers_min_max": [
+        32,
+        77
+      ],
+      "all_functions_zero_spill": true,
+      "recurrence_registers": [
+        64,
+        66,
+        73,
+        74,
+        77
+      ],
+      "recurrence_zero_spill": true
+    },
+    "reg8": {
+      "all_functions_registers_min_max": [
+        32,
+        175
+      ],
+      "all_functions_zero_spill": true,
+      "recurrence_registers": [
+        140,
+        147,
+        148,
+        149,
+        157,
+        172,
+        174,
+        175
+      ],
+      "recurrence_zero_spill": true
+    }
+  },
+  "raw_file_sha256": {
+    "build_baseline.log": "ee3028f655025f692e0ab4ce521e9e0c5392998de6111c74566c2efcd5fbc257",
+    "build_reg8.log": "50430e7835b0f3f8dddb48ce8ded33aeaf21e52abaec5b0ef5f4fd15f3383701",
+    "exact_baseline.json": "029f19bf564ec32b14114571bf6bd5b70abc03eeb71c2acd6f63e3538bec9524",
+    "exact_baseline.log": "029f19bf564ec32b14114571bf6bd5b70abc03eeb71c2acd6f63e3538bec9524",
+    "exact_reg8.json": "5ecda1f8f1422477875de09d74a1f37e10a9aad941265cbc9be81f92d741cc06",
+    "exact_reg8.log": "5ecda1f8f1422477875de09d74a1f37e10a9aad941265cbc9be81f92d741cc06",
+    "map.json": "4cfecd6c57af0a201170209dfa6a617d62a78bbd9e16ac016d7cb343511314da",
+    "map_build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "pair_0_baseline.json": "7242d75df1a9b21ee2bfe30405805af1e599c679fc5e810571fcac4c327e7182",
+    "pair_0_baseline.log": "7242d75df1a9b21ee2bfe30405805af1e599c679fc5e810571fcac4c327e7182",
+    "pair_1_reg8.json": "11f9360e6ed26c8703e0c49f023fbe55f5ce5354508c7a230c52b9739bc00266",
+    "pair_1_reg8.log": "11f9360e6ed26c8703e0c49f023fbe55f5ce5354508c7a230c52b9739bc00266",
+    "pair_2_reg8.json": "325a023f78f5fdf33c02404fd9a52ca04b0d702814549f4f0306221653cf5706",
+    "pair_2_reg8.log": "325a023f78f5fdf33c02404fd9a52ca04b0d702814549f4f0306221653cf5706",
+    "pair_3_baseline.json": "00eb34cbb5ddb3f95113b2cbc6a5296c27b7080d39489a08e0d242718bebbe1a",
+    "pair_3_baseline.log": "00eb34cbb5ddb3f95113b2cbc6a5296c27b7080d39489a08e0d242718bebbe1a"
+  },
+  "torch_version": "2.13.0+cu130"
+}

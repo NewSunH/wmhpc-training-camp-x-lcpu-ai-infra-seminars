@@ -43,6 +43,20 @@ C++ 加 inline PTX 的 Blackwell KDA 实现，不依赖 CUTLASS/CuTe runtime；R
 模式，但 B200 的 CUTLASS baseline、shape 集合和 CUPTI kernel-only 计时不能
 替代本题 B300 的 CUDA-event 对照。
 
+进一步审计该项目当前的
+\href{https://github.com/Int21-AI/KDA-B200/blob/main/csrc/flash_kda_cuda.cu}
+{\code{flash\_kda\_cuda.cu}} 可见，它并非把所有 recurrence 都替换为
+\code{tcgen05}：\code{warp\_recurrence\_value\_pair\_bf16} 的投影和 state
+update 仍显式调用 \code{mma\_sync\_m16n8k16\_bf16}。更关键的是，该函数的
+模板参数 \code{RegisterStateKeys} 与 \code{CacheProjectionState} 允许每个
+warp 先将一部分 state key block 读入 \code{uint32\_t} register fragment，后续
+chunk 的 projection 对 cache hit 通过 \code{movmatrix\_trans\_b16} 转成所需
+B-fragment 方向；其 launch-time specialization 按 fixed/varlen、value slice 和
+compute-warp 形态选择 1--7 个 cached key blocks。这个公开实现给 R19 的
+``partial register-state cache'' 提供了设计线索，但两者的 layout、同步、设备和
+benchmark 口径不同；本项目没有复制该实现，也不能把其公开成绩当作 R19 的性能
+结果。
+
 \paragraph{cuLA。}
 \href{https://github.com/inclusionAI/cuLA}{cuLA} 将 SM100 KDA 与 SM90
 FlashKDA 分成两套实现，README 声称在 18 个配置上相对 FLA 平均约 1.33x
@@ -103,7 +117,9 @@ memory 生命周期和 SM80 MMA 形状共同调过的 v1。
         inverse 临时区，TMA 读取原始输入并写出六类 workspace。
   \item K2 recurrence 固定输入 stage=3、output stage=2、非 split block
         为 192 threads、grid 为 \code{(N,H)}；四个 warp 负责 MMA，两个 warp
-        负责 load/store。动态 shared memory 在本题 H=96 形状约 200,704 B，
+        负责 load/store。NCU 的 Dynamic Shared Memory Per Block 在本题 H=96
+        形状为 98,432 B（约 96.125 KiB）；200,704 B 是 Shared Memory
+        Configuration/SM，不能当作单个 CTA 的 dynamic shared-memory，
         NCU 观察到约 66--74 registers/thread、约 9.37\% achieved occupancy，
         因而属于资源和状态依赖共同限制的 kernel。
   \item TMA descriptor 仍以 \code{SM90\_TMA\_LOAD/STORE} 形式描述，MMA
@@ -138,8 +154,18 @@ K2 重算 gate 而在长序列慢约 33.6\%；R18 显示，PDL 只有在 trigger
 \begin{decision}{公开资料复核结论}
 没有找到一个与本题相同的 B300、\(T=8192,H=96,D=128\)、同一 CUDA-event
 口径且公开证明“只修改当前 HMMA K2 即稳定快 1--5\%”的实现。公开成功案例
-几乎都采用 Blackwell-native tcgen05/TMEM、shape specialization、persistent
-调度或 reusable workspace；这些资料提高了 SM103 专版值得尝试的可信度，
-同时也证明迁移成本远高于调整 stage 或减少一个 store。当前默认 baseline
-保持不变，R15/R17/R18 的 opt-in 分支只作为可复核的负向或边界证据。
+包含两类不同路线：一类采用 Blackwell-native tcgen05/TMEM、shape
+specialization、persistent 调度或 reusable workspace；另一类仍使用 SM80-style
+MMA，但以 shape specialization、部分寄存器 state cache 和流水线组织降低
+recurrence 的局部开销。前者说明完整 SM103 专版的潜在上限，后者说明
+``保留 HMMA ABI、重构 state 数据驻留'' 也是需要实测的独立假设；两者都不能
+替代本题的同源 B300 对照。当前默认 baseline 保持不变，R15/R17/R18 的
+opt-in 分支只作为可复核的负向或边界证据。
 \end{decision}
+
+\paragraph{R19 后续实测更正。}
+上述公开资料筛选写于 R19 完成前。job 25286 已在本题 B300/CUDA-event 口径下
+实证：保持 CHUNK=16 和 SM80 MMA，组合 state cache、value-major、preload 与
+同步改写，H96 BF16 state 延迟降低 5.854\%（1.06218 倍速度），576 项 exactness
+通过。因此“要超过 baseline 就必须迁移 tcgen05”的强判断不成立。完整原始数据
+与接入边界见 R19；公开外部性能仍不代替本地同卡对照。

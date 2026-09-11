@@ -365,3 +365,13 @@ R16 的完整设计、命令、reference 和性能边界见
 
 R18 的完整命令、PDL 语义、integrated wiring 和接入判断见
 `../C1_R18_EXECUTION_SECTION.tex`；默认 `C1_K1_K2_PDL=0`。
+
+
+## R19：寄存器状态与流水线优化
+
+- `r19_25211/`：原方向 full cache exact，但 H96 BF16 延迟增加 14.92%。
+- `r19_25266/`：部分缓存、value-major、early-output 对照；独立映射与 FP32/BF16 探针全部零差异。
+- `r19_25281/`：preload 和同步消融；最佳 `vm8pre_ew` 的 H96 BF16 延迟降低 5.956%。
+- `r19_25286/`：最终独立验证，576 tests passed，4 long-sequence stress tests deselected。H96 BF16 `1.746072 → 1.643856 ms`，延迟降低 **5.854%**，速度比 **1.06218×**。H96 no-state 延迟降低 **12.971%**。
+
+最终候选通过六个 build-time 定义启用；`challenge/r19_build_optimized.sh` 提供强制重建入口。默认宏保持关闭。`env_*` 是进程环境，不能用来反推 `.so` 编译配置；实际 module path、SHA 与 build log 才是构建身份。报告区分延迟降低 `1-new/base` 与速度提升 `base/new-1`。

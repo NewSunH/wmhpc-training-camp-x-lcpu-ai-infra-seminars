@@ -1,0 +1,423 @@
+\section{R19 执行记录：K2 partial register-resident state cache}
+
+\subsection{动机、假设与不变式}
+
+前几轮已表明，当前非 split K2 的主矛盾不是简单减少一个 output store：R10--R12
+的 output 路径改写未超过默认 baseline，R15 的局部 workspace fusion 因重复
+gate 计算而在长序列退化，R17/R18 也没有把 DSM/PDL 转化为完整 K2 的稳定收益。
+R19 因而只改变同一 CTA、同一 head 的相邻 chunk 之间已经天然连续的数据：
+recurrence state 的一部分 key blocks。
+
+对 \(D=128\)、BF16 state，单个 head 的 state 是
+\(128\times128\times2=32\) KiB。当前 K2 在每个 chunk 的 Phase 1 projection
+从 shared state 读该矩阵一次，Phase 6 update 再读一次并写回一次；以逻辑
+state tile 计，这是约 \(32+32+32=96\) KiB 的 shared-memory state traffic。
+四个 MMA warp 各自负责不重叠的两个 16-column value blocks，且 chunk
+\(t+1\) 的 state 投影正好消费 chunk \(t\) 更新后的同一块。因此实验假设为：
+将若干完整的 16-key-block \(\times\) 128-value state tile，以每 lane 的
+packed BF16 C fragment 留在寄存器，可避免该部分在相邻 chunk 间的 Phase 1
+load、Phase 6 reload 和中间 shared store，而不改变 K1 workspace、CHUNK、状态
+dtype 或 chunk 顺序。
+
+这里的 ``96 KiB'' 是为选择 cache 容量而作的逻辑 shared-traffic 模型，不是
+NCU 已测得的 transaction counter；bank conflict、copy atom 指令数和寄存器
+spill 仍须由下述 experiment 测量。cache hit 也不消除首次 initial-state TMA
+load 或 final-state 的既有写回协议。
+
+本轮必须保持以下不变式：
+
+\begin{enumerate}
+  \item CHUNK 仍为 16，K1 六类 workspace 及 Python API 不变；
+  \item 每个 state update 仍在原来的 BF16 round point 写入 BF16 fragment，不能
+        因 cache 改为 FP32 recurrence；
+  \item cache 只覆盖一个 MMA warp 独占的 value columns，warp/CTA 间不交换
+        register state；
+  \item 初始 state 的 TMA load、FP32 state 的既有 convert path，以及最终 state
+        的 shared/TMA store 和同步顺序仍由原协议负责；
+  \item 默认宏关闭，R19 只能以独立 extension 和 build-time opt-in 比较，不能
+        覆盖默认安装。
+\end{enumerate}
+
+\subsection{实现边界和 fragment 方向验证}
+
+\code{fwd\_kernel2.cuh} 的 R19 分支由
+\code{C1\_K2\_REGISTER\_STATE} 和
+\code{C1\_K2\_REGISTER\_STATE\_BLOCKS} 控制；\code{setup.py} 仅在
+\code{FLASH\_KDA\_C1\_REGISTER\_STATE=1} 时传入这两个定义，并限制 block
+数为 1--8。每个 cached block、value block 和 lane 保存四个 \code{uint32\_t}
+（八个 BF16）。完整 \(8\) block、两个 value blocks 的 cache 因而是每 lane
+\(8\times2\times4=64\) 个 \code{uint32\_t}；这可能提高 register pressure，故 R19 同时测量 5-block
+和 8-block，而不预设全 cache 一定更快。
+
+Phase 6 的 state C fragment 逻辑方向是 \([\mathrm{key},\mathrm{value}]\)，
+下一 chunk 的 Phase 1 需要 B operand \([\mathrm{value},\mathrm{key}]\)。R19
+对 cached Phase 1 fragment 使用既有 \code{SM75\_U32x1\_MOVM\_T} 做 register
+file 内转置；未 cached block 保留原 \code{LDSM} shared load。缓存更新后，非
+cached block 正常写回 shared；cached block 在最终 state output 所需时也按原
+store protocol 发布到 shared，随后复用既有 final-state TMA/FP32 conversion。
+
+在完整 arithmetic benchmark 前，\code{challenge/r19\_state\_register\_map.cu}
+以唯一 BF16 bit pattern 构造全部 \(128\times128\) state 元素，将真实
+\code{STSM\_T/LDSM} shared path 作为 oracle，并逐 packed word 对比
+\code{MOVM\_T} 后的 C\(\to\)B fragment。该 probe 的接受条件是
+\code{c\_mismatches=0} 且 \code{b\_packed\_mismatches=0}；它只验证 layout
+转换，不是 recurrence 正确性或性能数据。
+
+\subsection{公开实现带来的设计线索与差异}
+
+R19 初版完成后才复核公开的
+\href{https://github.com/Int21-AI/KDA-B200/blob/main/csrc/flash_kda_cuda.cu}
+{KDA-B200 \code{flash\_kda\_cuda.cu}}。该实现的
+\code{warp\_recurrence\_value\_pair\_bf16} 也使用部分 register state cache：
+\code{RegisterStateKeys}/\code{CacheProjectionState} 在 cache hit 时以
+\code{movmatrix\_trans\_b16} 将 cached state 转成 projection 所需方向，且其
+specialization 根据 fixed/varlen、value slice 和 compute-warp 配置选择不同 cache
+容量。此处仅把它作为“partial cache + fragment transpose 是可行设计空间”的公开
+证据；R19 没有复制该文件的实现。两者的 state layout、thread organization、
+pipeline、launch specialization 和计时口径均不同，本地 R19 的正确性与性能必须
+独立给出。
+
+\subsection{预注册的构建、正确性与性能方法}
+
+baseline 和 candidate 必须在同一 B300 Slurm allocation 中，由两个隔离的 source
+tree 构建；默认远端 editable install 不参与也不被改写。candidate 固定使用
+\code{FLASH\_KDA\_C1\_REGISTER\_STATE=1}，分别测试
+\code{FLASH\_KDA\_C1\_REGISTER\_STATE\_BLOCKS=5} 与 \(8\)；baseline 不传
+R19 compile definition。每次运行的 JSON 记录实际导入的 \code{flash\_kda} 和
+\code{flash\_kda\_C} 路径、extension SHA-256、GPU capability 和运行时
+进程环境变量（不是编译身份），并以 build log 和 module SHA 防止把旧 \code{.so} 误当作 candidate。
+
+可选的 \code{FLASH\_KDA\_C1\_EARLY\_OUTPUT=1} 不改变 state cache 的数值
+语义：Phase 5 后，对不同时满足“有 final state output 且为最后一个 chunk”的
+output tile 提前 producer-commit，使 STORE warp 能与 Phase 6 recurrence
+overlap；最后一个需发布 final BF16 state 的 tile 保持 late commit，以保留既有
+state synchronization 和 TMA store 顺序。它必须先作为独立因素与 register cache
+分别测量，随后才允许测试组合，不能把组合结果归因给其中单一开关。
+
+\code{r19\_probe.py} 的 exactness 使用 vendored \code{tests.torch\_ref}，覆盖
+\(T=16,H=1\)、tail \((17,4)\)、多 chunk \((64,12)\)、目标头数的短长尾
+\((97,96)\)、BF16/FP32 state、no-state 和 two-sequence varlen。每一项均要求
+output 与适用的 final state 逐 bit equal。性能使用 public \code{flash\_kda.fwd}
+的 CUDA events；输入、output buffer 和 state buffers 在计时前建立，避免把
+Python-side clone/zero-fill 记入 R19，extension 内原本的 workspace allocation
+仍包含在 API 时间中。固定 \(T=8192\) 的 H=4/12/96、BF16/FP32/no-state 与
+8-sequence varlen case 以 ABBA 顺序（baseline,candidate,candidate,baseline）
+重复，比较两类 run median 的 median。
+
+接受规则预先规定如下：任何 exactness failure 或 map failure 都使该容量不能作为
+性能候选；ptxas/NCU 则比较 R19 K2 实例相对于同源 baseline 的 spill 与资源变化，
+不把既有 K1 的轻微 spill 误归因给 R19。性能只与相同 allocation、相同 shape、
+已核验 module SHA 的 baseline 配对。即使 event 有正向差异，仍须结合 registers/thread、dynamic
+shared memory、achieved occupancy、shared/LDSM/STSM 指令或相关 NCU 指标判断；
+若 register 增长抵消了 cache hit，则保留它为可复核负结果而不默认开启。
+
+\subsection{首次 B300 启动：toolchain flag 失败（不构成 R19 结果）}
+
+2026-09-10 的 B300 job 25205 在
+\code{/home/lcpu/10578328/c1\_r19\_run\_20260910a} 启动。batch stdout 确认
+设备为 NVIDIA B300 SXM6 AC、driver 580.126.09，Python runtime 为
+PyTorch 2.13.0+cu130/CUDA 13.0；这些环境与若干 R11--R18 的 cu129 旧记录
+不同，后续 event 时间只能与同一 job/同一 toolchain 的 control 配对，不能直接
+比较历史绝对毫秒数。
+
+本次在 map probe 编译阶段即停止，故没有 baseline/reg8 extension build、
+map JSON、exactness、ptxas resource 或 benchmark 数据。\code{map\_build.log}
+中是十处同类 nvcc 诊断：\code{utils.cuh} 和 \code{fwd\_kernel2.cuh} 的
+device lambda 需要 \code{--expt-extended-lambda}，而 job 25205 的 standalone
+\code{r19\_state\_register\_map.cu} 编译命令未传该 flag。该问题只属于 probe
+toolchain 选项，尚未执行 R19 cache/MOVM arithmetic，不能解释为 layout 不匹配、
+正确性失败或性能负结果。原始 \code{map\_build.log} 与 batch stdout 已归档为
+\code{results/r19\_25205/}；重跑时必须补齐该 nvcc flag，且重新从 map 接受条件
+开始。
+
+\subsection{B300 job 25211：full 8-block cache 的正确性与 ABBA benchmark}
+
+补齐 \code{--expt-extended-lambda} 后，job 25211 在同一 B300 环境完成了
+map、两套隔离 build、exactness 与短矩阵 ABBA benchmark。map 的原始输出为
+
+\begin{lstlisting}
+{"state_elements":16384,"c_mismatches":0,"b_packed_mismatches":0}
+\end{lstlisting}
+
+故 R19 的 \code{STSM\_T} state C fragment 经 \code{MOVM\_T} 转为 Phase 1
+B fragment 的路径，至少在该覆盖全 state 元素的 bit-pattern probe 中与实际
+shared \code{LDSM} oracle 一致。baseline 和 reg8 分别从
+\code{c1\_r19\_run\_20260910a/baseline} 与 \code{.../reg8} 隔离目录构建；
+实际导入 extension 的 SHA-256 分别为
+\code{aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704}
+和
+\code{2dcb7e698ec830f88477af1cd3bc741b816d3f2551a4bb45d820970c13910fd2}，
+因此不是同一旧 \code{.so} 的伪对照。
+
+两种 binary 均执行七个 exactness case：\(T=16,H=1\) BF16 state、
+\((17,4)\) tail、\((64,12)\) 多 chunk、\((97,96)\) 目标头数尾块、
+\((17,4)\) FP32 state、\((64,4)\) no-state 以及两段 varlen
+\((64,4,n_{\mathrm{seq}}=2)\)。每个 case 的 output 均逐 bit equal；所有
+有 final state 的 case 也逐 bit equal。这验证的是 full 8-key-block cache
+在已覆盖的 BF16/FP32 state ABI、tail、varlen 语义下未改变数值结果。
+
+性能只测试了当前 full-cache 候选本身，未打开
+\code{FLASH\_KDA\_C1\_EARLY\_OUTPUT}，也未测试 5-block。每个 ABBA slot
+使用 \(T=8192,H=96,D=128\)、BF16 state、warmup=20、iters=50、repeats=3，
+即每 slot 150 个 CUDA-event samples；顺序为 baseline, reg8, reg8, baseline。
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+variant & ABBA slot median (ms) & two-slot median (ms) & latency change \\
+\midrule
+baseline & 1.743328,\ 1.743232 & 1.743280 & -- \\
+reg8 full cache & 2.003360,\ 2.003360 & 2.003360 & $+14.92\%$ increase \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+这里的 latency change 统一按 \(t_{\mathrm{candidate}}/t_{\mathrm{base}}-1\)
+计算，reg8 为 \(+14.92\%\)。两边同一 variant 的两个 slot 中位数非常接近，
+不能把这一级别的退化归为 ABBA 中的单调时钟漂移。ptxas
+在两次 build 中均报 0-byte spill。对本 ABBA 目标实际使用的 fixed、BF16
+state-in/out recurrence template（mangled template 后缀为
+\code{...,192,true,true,false,false,false}），ptxas 为 baseline 73 registers/thread、
+reg8 140 registers/thread；175 是另一 specialization，不能拿来解释该目标 case。
+这是 full cache 改变编译资源形态的相关证据，连同每个 hit 的 \code{MOVM\_T}
+指令和由此引入的依赖链，可以作为慢化嫌疑，而不是已实证的 occupancy 因果：按
+144-register allocation 的粗略上界，2 CTA 只需 55,296 registers，小于每 SM
+的 65,536；且 H=96 只有 96 CTA、少于 148 SM。故这里不把 register 数直接归因为
+该 ABBA 的 occupancy 回退。
+
+\begin{decision}{R19 full-cache 接入判定}
+job 25211 的 map 与七个 end-to-end exactness case 均通过，但 full 8-block
+register-state cache 在当前 CUDA 13.0/PyTorch 2.13.0+cu130 B300 toolchain 上
+有 \(+14.92\%\) 的 latency increase。因此不打开
+\code{FLASH\_KDA\_C1\_REGISTER\_STATE} 默认开关。
+该负结果不能否定更小 cache 容量、不同 state-fragment direction 或与 early
+output overlap 的候选；但任何后续候选都必须对本轮已通过的 map/exactness
+语义重新验证，并与本轮同 toolchain baseline 配对，不能同 R1--R18 的 cu129
+绝对毫秒数混比。
+\end{decision}
+
+\subsection{B300 job 25266：5-block、early-output 与 value-major 对照}
+
+2026-09-10 的 job 25266 在同一型号、同一 CUDA 13.0/cu130 B300 环境中先运行
+value-major probe。它不仅覆盖 fragment packed-word 映射，还以固定随机种子逐 bit
+对比 1,048,576 个 FP32 accumulator 和同数目的 BF16 state-update 结果；
+state C\(\to\)B、U B\(\to\)A、以及 restored-K A\(\to\)B 的 packed 比较分别为
+8,192、1,024、4,096，五类 mismatch count 均为零。随后 reg5、early、vm8 和
+vm5 各自在隔离 extension 中完成同一 7-case output/final-state exactness，均为
+逐 bit equal。原始 JSON、build/exact logs、batch stdout 与摘要归档于
+\code{results/r19\_25266/}。
+
+此 job 的每个候选均以旧同 GPU baseline binary 在同一 allocation 中作
+baseline,candidate,candidate,baseline ABBA；形状为
+\(T=8192,H=96,D=128\)、BF16 state，slot 设置为 warmup=20、iters=50、repeats=3。
+表中 ``latency change'' 对延迟增加为 \(t_{\rm candidate}/t_{\rm base}-1\)，
+对延迟降低为 \(1-t_{\rm candidate}/t_{\rm base}\)；每个数值都只是本次两
+candidate-slot median 的 median，不能替代跨 allocation 的复测。
+
+\begin{center}
+\small
+\begin{tabular}{@{}l r r r@{}}
+\toprule
+variant & baseline (ms) & candidate (ms) & latency change \\
+\midrule
+reg5 (legacy \code{MOVM\_T}) & 1.752528 & 1.790264 & $+2.153\%$ increase \\
+early-output only & 1.756552 & 1.735928 & $-1.174\%$ decrease \\
+vm8 (value-major, 8 blocks) & 1.754704 & 1.826552 & $+4.095\%$ increase \\
+vm5 (value-major, 5 blocks) & 1.755544 & 1.937992 & $+10.393\%$ increase \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+early-output 是唯一一次正向观察，但它只有这一个 allocation 的一对 candidate
+slots，故当前状态是 ``exact + provisional positive''，尚不足以默认启用。reg5
+与 value-major 的三项负结果则是 cache 方向/容量控制：它们表明不应把 job 25211
+的 full-cache 慢化单独归因为 \code{MOVM\_T}，也不应把 value-major layout 视为
+自动加速。目标 K2 template 的 ptxas registers/thread 为 early 66、reg5 125、vm8
+149、vm5 127，且各自 0-byte spill；这些资源数同样只记录相关变化，不构成
+occupancy 的因果证明。后续应以 early-only 的独立 ABBA 重复，优先检验该小幅
+\(1.174\%\) 是否超过 run-to-run 噪声，再考虑与其它更改组合。
+
+
+\subsection{B300 job 25281：preload、value-major 与同步消融}
+
+job 25281 沿用 CUDA 13.0/PyTorch 2.13.0+cu130，在一个 B300 allocation 内
+分别构建 early、warp、earlywarp、reg8pre、vm8pre、vm8pre\_ew 六个候选。
+每个候选先通过七项 exactness，再对固定 \(T=8192,H=96,D=128\)、BF16 state
+运行 ABBA：每 slot warmup=20、iters=50、repeats=3。完整日志和原始样本见
+\code{results/r19\_25281/}，聚合脚本的结果为：
+
+\begin{center}\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+variant & baseline (ms) & candidate (ms) & latency reduction \\
+\midrule
+early output & 1.743264 & 1.725160 & 1.039\% \\
+warp sync & 1.743344 & 1.733144 & 0.585\% \\
+early output + warp sync & 1.743280 & 1.718576 & 1.417\% \\
+legacy cache + preload & 1.743408 & 1.655240 & 5.057\% \\
+value-major cache + preload & 1.745856 & 1.649584 & 5.514\% \\
+value-major + preload + early + warp & 1.743808 & 1.639952 & 5.956\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Preload。}
+此前的 cache 在 chunk 0 完成 Phase 6 时才建立；每个展开后的 Phase 1/6
+state load 都检查 \code{t>0}。新分支在 initial-state TMA/FP32 conversion/零填
+及其同步完成后，一次性把缓存覆盖的 state 读到寄存器，然后进入 recurrence
+loop。因此首次和后续 chunk 共享同一 cache 路径，移除了内层的首块条件分支。
+legacy 8-block cache 加 preload 后，从此前慢 14.92\% 变为快 5.057\%。
+该对照支持优化 cache 初始化和循环组织；具体编译器调度变化仍是机制推断，
+不能把全部收益只归给一条 branch 指令。
+
+\paragraph{Value-major。}
+把 Phase 6 更新写成 \(S_{v,k}\leftarrow S_{v,k}g_k+U^\mathsf{T}_{v,t}K_{t,k}\)，
+使缓存 C fragment 的逻辑方向直接与下一轮 projection 的 B operand 相同。
+C/A 与 B 的四个 packed word 只需顺序 \code{[0,2,1,3]}，避免每个 cached
+key/value block 的四次跨 lane \code{MOVM\_T}。gate 索引随布局变为
+\code{m*16 + 2*(lane\%4) + a + 8*d}，同一 key 上的两个 value row-half
+使用同一个 gate。运算转置不能仅由代数推断 bitwise，故 job 25266 的独立
+FP32/BF16 arithmetic probe 和后续完整回归都是必要证据。
+
+\paragraph{同步和 early output。}
+state 的 value blocks 各自归一个 warp。对非 fused-workspace/g-total 分支，
+输入 ring 的 release 和输出 ring 的 commit 已统计所有消费者/生产者，故将
+额外的末尾 NamedBarrier 缩小为 \code{\_\_syncwarp()}；仍保留跨 lane shared
+访问所需的 warp 同步、每个线程的发布 fence 和完整 pipeline 计数。输出 tile
+写完后即可 commit，让 STORE warp 与 Phase 6 重叠；若需要 final state，最后
+一个 chunk 仍在 state 更新及发布后才 commit。这个边界保留了 R7 曾遗漏的
+final-state ordering。
+
+\paragraph{实验身份。}
+25266/25281 的 \code{env\_*} JSON 字段是运行时环境，不是编译配置。sweep
+中的 baseline 进程曾继承 candidate 环境变量，但实际载入的 baseline module
+path/SHA 均与 job 25211 的 baseline 相同；macro 是 build-time 选择，运行时
+不能改变已加载 binary。判定使用实际 \code{.so} SHA 和 build log。最终
+25286 在计时前将这些环境变量全部 unset，也验证了相同 binary 身份。
+
+\subsection{B300 job 25286：576 项回归与独立多形状复测}
+
+最终候选 \code{vm8pre\_ew} 打开以下六个编译定义：
+\begin{lstlisting}
+C1_K2_REGISTER_STATE=1
+C1_K2_REGISTER_STATE_BLOCKS=8
+C1_K2_VALUE_MAJOR_STATE=1
+C1_K2_PRELOAD_REGISTER_STATE=1
+C1_K2_WARP_STATE_SYNC=1
+C1_K2_EARLY_OUTPUT=1
+\end{lstlisting}
+
+在新的 B300 allocation 中先执行原仓库测试：
+\begin{lstlisting}
+python -m pytest tests/test_fwd_full.py -q -x -k 'not long'
+\end{lstlisting}
+结果为 \textbf{576 passed, 4 deselected in 962.77s}。覆盖 fixed、非整齐 varlen、
+B>1、H=1/4/32/96、所有 state input/output 组合、BF16/FP32、跨 chunk 和 tail；
+output 和适用的 final state 使用 \code{torch.equal}。未运行的四项属于独立
+长序列压力测试，长度为 131,072 或 1,048,576 tokens；不能表述成全部官方测试
+或全部输入空间已经验证。
+
+随后用 public \code{flash\_kda.fwd} 做六个形状的 ABBA，warmup=30、iters=100、
+repeats=5，即每 variant 每 case 两次 run、共 1,000 次 event 样本。输入和
+输出/state buffer 在计时前分配；API 内部的 workspace 分配保持原样，event
+区间也可能包含 start event 后的 host launch 空隙，故这是该 public API 的
+CUDA-event 口径，不是 CUPTI kernel-only 时间。两次 run median 再取 median。
+以下各行总 \(T=8192,D=128\)；varlen 行是 8 段、每段 1,024 tokens。
+
+\begin{center}\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+case & baseline (ms) & candidate (ms) & latency reduction \\
+\midrule
+H96, BF16 state & 1.746072 & 1.643856 & 5.854\% \\
+H12, BF16 state & 1.343888 & 1.225264 & 8.827\% \\
+H4, BF16 state & 1.278480 & 1.184872 & 7.322\% \\
+H96, FP32 state & 1.699176 & 1.686000 & 0.775\% \\
+H96, no state & 1.745360 & 1.518976 & 12.971\% \\
+H96, 8-sequence BF16 varlen & 1.185264 & 1.173888 & 0.960\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+百分比统一定义为 \(100(1-t_{\rm candidate}/t_{\rm baseline})\)。题面 H96 BF16
+state 是 \textbf{5.854\% 延迟降低}，对应 \(1.06218\times\) 速度比；不能把
+\(t_{\rm baseline}/t_{\rm candidate}-1=6.218\%\) 写成延迟降低。H96 no-state
+为 12.971\% 延迟降低。FP32 state 和多序列 varlen 的差异小于 1\%，只说明
+本次测量略快，尚不足以宣称这些配置都有稳健收益。
+
+H96 BF16 两次 candidate run 为 1.648992、1.638720 ms，两次 baseline 为
+1.748848、1.743296 ms；它们与 job 25281 的约 5.956\% 延迟降低方向一致。
+设备型号、driver、所有原始样本、JUnit XML 和 NCU CSV 存于
+\code{results/r19\_25286/}。baseline/candidate binary SHA-256 分别是：
+\begin{lstlisting}
+aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704
+bab79adfb71f8515b814ff619a1044cf6c975554053fcc0d28f6a2a21c00ad1c
+\end{lstlisting}
+
+\subsection{资源与机制证据}
+
+\begin{center}\small
+\begin{tabular}{@{}lrr@{}}
+\toprule
+NCU metric & baseline & candidate \\
+\midrule
+registers/thread & 73 & 154 \\
+dynamic shared memory/block (B) & 98,432 & 98,432 \\
+achieved occupancy & 9.37\% & 9.37\% \\
+compute throughput & 20.96\% & 27.72\% \\
+memory throughput & 38.60\% & 24.20\% \\
+profiler duration (ms) & 1.281504 & 1.175168 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+candidate build log 的 recurrence 实例没有 spill。NCU 中 occupancy 没有提高，
+shared allocation 没有缩小；寄存器增加也没有让本次 achieved occupancy 下降。
+静态代码确实减少了 chunk 间的 shared-state 往返和 cached projection 的
+跨 lane transpose，配合 preload 和更早的 output commit 改善了临界路径。
+吞吐指标与该解释一致，但没有通过 NCU 单项归因所有延迟收益；表中 profiler
+时间不能替代正式 event benchmark。
+
+\subsection{复现、边界与接入决定}
+
+优化代码仍位于 \code{FlashKDA/csrc/smxx/fwd\_kernel2.cuh}，所有新宏默认关闭。
+\code{challenge/r19\_build\_optimized.sh} 会清除旧的 C1 实验环境变量，设置
+上述六个定义，并对指定 checkout 强制重新构建。建议使用独立 checkout：
+\begin{lstlisting}
+bash challenge/r19_build_optimized.sh /path/to/isolated/FlashKDA /path/to/python
+\end{lstlisting}
+运行必须使该 checkout 及其 \code{tests/} 位于 \code{PYTHONPATH}，并使用
+B300 GPU allocation。三轮搜索和最后验证脚本分别为
+\code{r19\_run.sbatch}、\code{r19\_variants.sbatch}、
+\code{r19\_schedule.sbatch}、\code{r19\_validate.sbatch}；参数定义写在各脚本中。
+本轮没有替换远端默认 editable installation。新的
+\code{r19\_summarize.py} 只接受四个明确的 ABBA JSON，检查 binary SHA
+稳定且互异、形状/seed 一致、原始样本 median 与记录一致，并输出两种百分比；
+validation 脚本在计时后调用它。搜索脚本遇到已存在的 variant 目录会退出，
+避免重跑时在旧 extension 目录下误构建。
+
+2026-09-11 另从获胜的远端 checkout 读取七个源码文件和 binary 的 SHA-256，
+确认 kernel、launch、utils、binding、setup 等与本地交付逐文件一致，CUTLASS
+HEAD 也是题面 pin；结果在 \code{source\_manifest.json}。这属于运行后源码
+核对，不是构建时的签名证明。H12/T8192 的 benchmark 输入没有另做同 seed
+reference；H12 在短序列 probe 中通过，主形状及其它标准形状由 576 项回归覆盖。
+两个主形状复测 allocation 使用同一设备 UUID，其余五个性能形状仅在最终
+allocation 测量，不把同进程内 1,000 个样本当作独立环境复测。
+
+本次正结果限定于 B300、CUDA 13.0/cu130、完整非 V-split 路径；没有在 5090、
+旧 cu129 toolchain 或所有历史实验宏组合上验证。四个超长 stress case 未跑，
+也没有做整模型质量评测。旧 \code{+baseline.r4} 等版本字符串不能代替 binary
+SHA。公开设计线索来自 INT21 KDA-B200 的 SM80/partial-cache 代码，参考 commit
+\code{4896cd2da4ca421829907ab9fd3550e3f84a141b}；本轮在既有 CuTe 路径中
+独立实现并对照验证，未把其 B200 性能数值当作本题结果。
+
+\begin{record}{R19 最终结论}
+已找到保留 CHUNK=16 和 SM80 MMA 的更快 kernel：完整 state cache、value-major
+fragment、循环外 preload、warp sync 与 early-output 的组合在 B300 上通过
+576 项 exactness，并在题面 H96 BF16 state 上将延迟从 1.746072 ms 降到
+1.643856 ms，降低 5.854\%。独立搜索 allocation 同方向，H12/H4 BF16 和 H96
+no-state 也有正向收益；FP32 state 与 8-sequence varlen 仅有小于 1\% 的差异。
+这推翻了“保持当前小 CHUNK/SM80 算法就没有进一步收益”的强说法，同时不构成
+迁移 tcgen05 的必要性证据。交付为 opt-in 优化代码、原始实验、报告和构建入口。
+\end{record}

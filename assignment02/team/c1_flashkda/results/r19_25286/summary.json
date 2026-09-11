@@ -1,0 +1,204 @@
+{
+  "job": 25286,
+  "device": "NVIDIA B300 SXM6 AC",
+  "toolchain": "CUDA 13.0 / PyTorch 2.13.0+cu130",
+  "correctness": "576 passed; 4 long-sequence stress tests deselected (T=131072 or 1048576)",
+  "candidate_macros": [
+    "C1_K2_REGISTER_STATE=1",
+    "C1_K2_REGISTER_STATE_BLOCKS=8",
+    "C1_K2_VALUE_MAJOR_STATE=1",
+    "C1_K2_PRELOAD_REGISTER_STATE=1",
+    "C1_K2_WARP_STATE_SYNC=1",
+    "C1_K2_EARLY_OUTPUT=1"
+  ],
+  "cases": [
+    {
+      "T": 8192,
+      "H": 96,
+      "nseq": 1,
+      "state_mode": "bf16",
+      "baseline_ms": 1.7460720241069794,
+      "candidate_ms": 1.6438559889793396,
+      "speedup_percent": 6.218065074611867,
+      "latency_reduction_percent": 5.854056059337975,
+      "speedup_ratio": 1.0621806507461187,
+      "baseline_run_medians_ms": [
+        1.748848021030426,
+        1.7432960271835327
+      ],
+      "candidate_run_medians_ms": [
+        1.6489919424057007,
+        1.6387200355529785
+      ]
+    },
+    {
+      "T": 8192,
+      "H": 12,
+      "nseq": 1,
+      "state_mode": "bf16",
+      "baseline_ms": 1.343887984752655,
+      "candidate_ms": 1.2252639532089233,
+      "speedup_percent": 9.681508317702448,
+      "latency_reduction_percent": 8.826928500708686,
+      "speedup_ratio": 1.0968150831770245,
+      "baseline_run_medians_ms": [
+        1.3438719511032104,
+        1.3439040184020996
+      ],
+      "candidate_run_medians_ms": [
+        1.225119948387146,
+        1.2254079580307007
+      ]
+    },
+    {
+      "T": 8192,
+      "H": 4,
+      "nseq": 1,
+      "state_mode": "bf16",
+      "baseline_ms": 1.2784799933433533,
+      "candidate_ms": 1.1848719716072083,
+      "speedup_percent": 7.900264668187851,
+      "latency_reduction_percent": 7.321821399124961,
+      "speedup_ratio": 1.0790026466818785,
+      "baseline_run_medians_ms": [
+        1.2784639596939087,
+        1.2784960269927979
+      ],
+      "candidate_run_medians_ms": [
+        1.1847519874572754,
+        1.1849919557571411
+      ]
+    },
+    {
+      "T": 8192,
+      "H": 96,
+      "nseq": 1,
+      "state_mode": "fp32",
+      "baseline_ms": 1.699176013469696,
+      "candidate_ms": 1.6859999895095825,
+      "speedup_percent": 0.7814960879060306,
+      "latency_reduction_percent": 0.7754360852357034,
+      "speedup_ratio": 1.0078149608790603,
+      "baseline_run_medians_ms": [
+        1.699072003364563,
+        1.699280023574829
+      ],
+      "candidate_run_medians_ms": [
+        1.6859519481658936,
+        1.6860480308532715
+      ]
+    },
+    {
+      "T": 8192,
+      "H": 96,
+      "nseq": 1,
+      "state_mode": "none",
+      "baseline_ms": 1.745360016822815,
+      "candidate_ms": 1.5189760327339172,
+      "speedup_percent": 14.903723245813305,
+      "latency_reduction_percent": 12.97061820523414,
+      "speedup_ratio": 1.149037232458133,
+      "baseline_run_medians_ms": [
+        1.7453440427780151,
+        1.7453759908676147
+      ],
+      "candidate_run_medians_ms": [
+        1.5190080404281616,
+        1.5189440250396729
+      ]
+    },
+    {
+      "T": 8192,
+      "H": 96,
+      "nseq": 8,
+      "state_mode": "bf16",
+      "baseline_ms": 1.185263991355896,
+      "candidate_ms": 1.1738879680633545,
+      "speedup_percent": 0.9690893511166365,
+      "latency_reduction_percent": 0.959788146396634,
+      "speedup_ratio": 1.0096908935111664,
+      "baseline_run_medians_ms": [
+        1.1852480173110962,
+        1.1852799654006958
+      ],
+      "candidate_run_medians_ms": [
+        1.1738879680633545,
+        1.1738879680633545
+      ]
+    }
+  ],
+  "definitions": {
+    "latency_reduction_percent": "100 * (1 - candidate_ms / baseline_ms)",
+    "speedup_percent": "100 * (baseline_ms / candidate_ms - 1)",
+    "speedup_ratio": "baseline_ms / candidate_ms"
+  },
+  "baseline_extension_sha256": "aee9088a6a74648b7ea0d7164dfbda10ae5c7fcdc5f83bd3115fb20a07f3d704",
+  "candidate_extension_sha256": "bab79adfb71f8515b814ff619a1044cf6c975554053fcc0d28f6a2a21c00ad1c",
+  "protocol": {
+    "warmup": 30,
+    "iters": 100,
+    "repeats": 5,
+    "run_order": [
+      "baseline",
+      "candidate",
+      "candidate",
+      "baseline"
+    ],
+    "aggregate": "median of the two run medians for each variant",
+    "timing_scope": "CUDA events around public flash_kda.fwd, including GPU idle gaps from host work after start-event; caller buffers prepared outside timing"
+  },
+  "ncu_diagnostic": {
+    "baseline": {
+      "Memory Throughput": {
+        "value": "38.60",
+        "unit": "%"
+      },
+      "Duration": {
+        "value": "1281504",
+        "unit": "ns"
+      },
+      "Compute (SM) Throughput": {
+        "value": "20.96",
+        "unit": "%"
+      },
+      "Registers Per Thread": {
+        "value": "73",
+        "unit": "register/thread"
+      },
+      "Dynamic Shared Memory Per Block": {
+        "value": "98432",
+        "unit": "byte/block"
+      },
+      "Achieved Occupancy": {
+        "value": "9.37",
+        "unit": "%"
+      }
+    },
+    "candidate": {
+      "Memory Throughput": {
+        "value": "24.20",
+        "unit": "%"
+      },
+      "Duration": {
+        "value": "1175168",
+        "unit": "ns"
+      },
+      "Compute (SM) Throughput": {
+        "value": "27.72",
+        "unit": "%"
+      },
+      "Registers Per Thread": {
+        "value": "154",
+        "unit": "register/thread"
+      },
+      "Dynamic Shared Memory Per Block": {
+        "value": "98432",
+        "unit": "byte/block"
+      },
+      "Achieved Occupancy": {
+        "value": "9.37",
+        "unit": "%"
+      }
+    }
+  }
+}

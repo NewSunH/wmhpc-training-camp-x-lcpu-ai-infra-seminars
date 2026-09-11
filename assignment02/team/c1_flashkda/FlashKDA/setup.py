@@ -21,6 +21,35 @@ def get_c1_vsplit_args():
     return ["-DC1_VSPLIT_K2=1"] if is_flag_set("FLASH_KDA_C1_VSPLIT_K2") else []
 
 
+def get_c1_register_state_args():
+    """Keep the R19 register-resident recurrence state opt-in."""
+    if not is_flag_set("FLASH_KDA_C1_REGISTER_STATE"):
+        return []
+    blocks = os.getenv("FLASH_KDA_C1_REGISTER_STATE_BLOCKS", "8")
+    if blocks not in {str(n) for n in range(1, 9)}:
+        raise ValueError("FLASH_KDA_C1_REGISTER_STATE_BLOCKS must be between 1 and 8")
+    return ["-DC1_K2_REGISTER_STATE=1", f"-DC1_K2_REGISTER_STATE_BLOCKS={blocks}"]
+
+
+def get_c1_state_schedule_args():
+    flags = []
+    if is_flag_set("FLASH_KDA_C1_PRELOAD_REGISTER_STATE"):
+        flags.append("-DC1_K2_PRELOAD_REGISTER_STATE=1")
+    if is_flag_set("FLASH_KDA_C1_WARP_STATE_SYNC"):
+        flags.append("-DC1_K2_WARP_STATE_SYNC=1")
+    return flags
+
+
+def get_c1_value_major_state_args():
+    """Cache the transposed update in projection-compatible lane ownership."""
+    return ["-DC1_K2_VALUE_MAJOR_STATE=1"] if is_flag_set("FLASH_KDA_C1_VALUE_MAJOR_STATE") else []
+
+
+def get_c1_early_output_args():
+    """Overlap output TMA with recurrence, preserving final-state ordering."""
+    return ["-DC1_K2_EARLY_OUTPUT=1"] if is_flag_set("FLASH_KDA_C1_EARLY_OUTPUT") else []
+
+
 def get_c1_state_only_args():
     """Build the R7 recurrence probe without K2 output materialization."""
     return ["-DC1_K2_STATE_ONLY=1"] if is_flag_set("FLASH_KDA_C1_STATE_ONLY") else []
@@ -156,6 +185,10 @@ ext_modules = [
                 *get_nvcc_thread_args(),
                 *get_arch_flags(),
                 *get_c1_vsplit_args(),
+                *get_c1_register_state_args(),
+                *get_c1_value_major_state_args(),
+                *get_c1_state_schedule_args(),
+                *get_c1_early_output_args(),
                 *get_c1_state_only_args(),
                 *get_c1_output_stage_args(),
                 *get_c1_out_fp32_args(),

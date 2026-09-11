@@ -1,0 +1,52 @@
+{
+  "job": 25281,
+  "case": "T8192 H96 BF16 state",
+  "warmup": 20,
+  "iters": 50,
+  "repeats": 3,
+  "runtime_environment_note": "env_* is runtime metadata only; module SHA plus build log identifies compilation flags. Baseline processes in this sweep inherited candidate env values but used the verified baseline binary.",
+  "cases": [
+    {
+      "variant": "early",
+      "baseline_ms": 1.743263989686966,
+      "candidate_ms": 1.725160002708435,
+      "latency_reduction_percent": 1.0385109246581647,
+      "speedup_ratio": 1.0104940915336018
+    },
+    {
+      "variant": "warp",
+      "baseline_ms": 1.743344008922577,
+      "candidate_ms": 1.7331440150737762,
+      "latency_reduction_percent": 0.5850821063769551,
+      "speedup_ratio": 1.005885254635557
+    },
+    {
+      "variant": "earlywarp",
+      "baseline_ms": 1.7432799935340881,
+      "candidate_ms": 1.7185760140419006,
+      "latency_reduction_percent": 1.4170976311215555,
+      "speedup_ratio": 1.014374679554666
+    },
+    {
+      "variant": "reg8pre",
+      "baseline_ms": 1.7434080243110657,
+      "candidate_ms": 1.6552400290966034,
+      "latency_reduction_percent": 5.057220913578342,
+      "speedup_ratio": 1.0532659878111954
+    },
+    {
+      "variant": "vm8pre",
+      "baseline_ms": 1.7458560168743134,
+      "candidate_ms": 1.6495839953422546,
+      "latency_reduction_percent": 5.514316220899984,
+      "speedup_ratio": 1.0583613940265493
+    },
+    {
+      "variant": "vm8pre_ew",
+      "baseline_ms": 1.743808001279831,
+      "candidate_ms": 1.639952003955841,
+      "latency_reduction_percent": 5.955701387295331,
+      "speedup_ratio": 1.063328681006195
+    }
+  ]
+}
